@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LC/FD 비교 체크</title>
+<style>
+:root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;--accent:#4f7cff;--accent2:#7c4fff;--ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--text:#e8eaf0;--sub:#8b90a8;--r:12px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;padding:20px 14px;}
+h1{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:3px;}
+.sub{font-size:.73rem;color:var(--sub);margin-bottom:16px;}
+/* Lang select screen */
+#langScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;}
+.lang-title{font-size:1.1rem;font-weight:700;color:var(--sub);text-align:center;}
+.lang-btns{display:flex;gap:16px;}
+.lang-btn{padding:18px 36px;border:2px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .2s;text-align:center;}
+.lang-btn:hover{border-color:var(--accent);background:rgba(79,124,255,.1);}
+.lang-btn span{display:block;font-size:.72rem;color:var(--sub);margin-top:4px;font-weight:400;}
+/* Main app */
+#app{display:none;}
+.lang-switch{text-align:right;margin-bottom:10px;}
+.lang-switch button{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--sub);padding:4px 10px;font-size:.7rem;cursor:pointer;}
+.lang-switch button:hover{border-color:var(--accent);color:var(--text);}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:14px;}
+.tab{flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--sub);font-size:.78rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;}
+.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;}
+.tab:not(.active):hover{border-color:var(--accent);color:var(--text);}
+.panel{display:none;}.panel.active{display:block;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px;}
+.ct{font-size:.73rem;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+.ubox{border:2px dashed var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;position:relative;transition:all .2s;margin-bottom:8px;}
+.ubox:hover{border-color:var(--accent);background:rgba(79,124,255,.05);}
+.ubox.has{border-color:var(--ok);border-style:solid;background:rgba(34,197,94,.05);}
+.ubox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.ui{font-size:1.5rem;margin-bottom:4px;}
+.ul{font-size:.7rem;font-weight:600;color:var(--sub);}
+.un{font-size:.66rem;color:var(--ok);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.crow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.crow label{font-size:.76rem;color:var(--sub);white-space:nowrap;}
+select,input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 9px;font-size:.78rem;outline:none;}
+select:focus,input[type=text]:focus{border-color:var(--accent);}
+.btn{width:100%;padding:11px;border:none;border-radius:9px;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-p{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.btn-p:hover{opacity:.88;transform:translateY(-1px);}
+.btn-p:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-s{background:var(--surface2);color:var(--sub);font-size:.76rem;padding:8px;border:1px solid var(--border);}
+.btn-s:hover{border-color:var(--accent);color:var(--text);}
+.lc-item{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .2s;}
+.lc-item:hover{border-color:var(--accent);}
+.lc-item.selected{border-color:var(--ok);background:rgba(34,197,94,.07);}
+.lc-head{display:flex;justify-content:space-between;align-items:center;}
+.lc-title{font-size:.8rem;font-weight:700;}
+.lc-meta{font-size:.68rem;color:var(--sub);margin-top:3px;}
+.lc-badge{font-size:.65rem;padding:2px 8px;border-radius:10px;background:rgba(34,197,94,.15);color:var(--ok);}
+.del-btn{background:rgba(239,68,68,.15);color:var(--ng);border:none;border-radius:6px;padding:3px 8px;font-size:.68rem;cursor:pointer;}
+.del-btn:hover{background:rgba(239,68,68,.3);}
+.empty{text-align:center;color:var(--sub);font-size:.78rem;padding:20px;border:1px dashed var(--border);border-radius:9px;}
+.steps{display:flex;gap:4px;margin-bottom:9px;}
+.step{flex:1;padding:5px;border-radius:6px;text-align:center;font-size:.67rem;font-weight:600;border:1px solid var(--border);color:var(--sub);background:var(--surface2);}
+.step.active{border-color:var(--accent);color:var(--accent);background:rgba(79,124,255,.1);}
+.step.done{border-color:var(--ok);color:var(--ok);background:rgba(34,197,94,.08);}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.lmsg{font-size:.78rem;color:var(--sub);padding:7px 0;}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.verdict{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
+.v-text{font-size:1rem;font-weight:800;}
+.v-sub{font-size:.7rem;color:var(--sub);}
+.srow{display:flex;gap:7px;margin-bottom:11px;}
+.sc{flex:1;background:var(--surface2);border-radius:8px;padding:8px 9px;text-align:center;border:1px solid var(--border);}
+.sn{font-size:1.2rem;font-weight:800;}
+.sn.ok{color:var(--ok);}.sn.ng{color:var(--ng);}.sn.warn{color:var(--warn);}
+.sl{font-size:.63rem;color:var(--sub);margin-top:1px;}
+.sh{display:flex;align-items:center;gap:7px;margin:13px 0 5px;}
+.st{font-size:.78rem;font-weight:700;}
+.badge{font-size:.63rem;font-weight:700;padding:2px 7px;border-radius:10px;}
+.b-ok{background:rgba(34,197,94,.15);color:var(--ok);}
+.b-ng{background:rgba(239,68,68,.15);color:var(--ng);}
+.b-w{background:rgba(245,158,11,.15);color:var(--warn);}
+.ci{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:7px;margin-bottom:3px;background:var(--surface2);border-left:3px solid transparent;}
+.ci.ok{border-left-color:var(--ok);}.ci.ng{border-left-color:var(--ng);}.ci.warn{border-left-color:var(--warn);}
+.ctit{font-size:.76rem;font-weight:600;margin-bottom:1px;}
+.ci.ok .ctit{color:#86efac;}.ci.ng .ctit{color:#fca5a5;}.ci.warn .ctit{color:#fcd34d;}
+.cdesc{font-size:.7rem;color:var(--sub);line-height:1.5;}
+.sbox{background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:4px;border:1px solid var(--border);font-size:.76rem;line-height:1.7;white-space:pre-wrap;}
+.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:9px;padding:10px 12px;font-size:.76rem;color:#fca5a5;white-space:pre-wrap;}
+table{width:100%;border-collapse:collapse;font-size:.72rem;}
+th{text-align:left;padding:4px 5px;color:var(--sub);border-bottom:1px solid var(--border);}
+td{padding:4px 5px;border-bottom:1px solid var(--border);}
+.hist-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:all .2s;}
+.hist-item:hover{border-color:var(--accent);}
+.hist-head{display:flex;justify-content:space-between;align-items:center;}
+.hist-title{font-size:.77rem;font-weight:600;}
+.hist-meta{font-size:.66rem;color:var(--sub);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<!-- 언어 선택 화면 -->
+<div id="langScreen">
+  <div class="lang-title">🔍 LC / FD 비교 체크 Tool<br><span style="font-size:.85rem;font-weight:400">LEENEAR CORPORATION</span></div>
+  <div class="lang-btns">
+    <div class="lang-btn" onclick="initApp('ko')">🇰🇷 한국어<span>Korean</span></div>
+    <div class="lang-btn" onclick="initApp('ja')">🇯🇵 日本語<span>Japanese</span></div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="app">
+  <div class="lang-switch"><button onclick="backToLang()">🌐 <span id="langSwitchBtn"></span></button></div>
+  <h1>🔍 LC / FD <span id="appTitle"></span></h1>
+  <p class="sub">LEENEAR CORPORATION — v5</p>
+
+  <!-- API 키 입력 -->
+  <div class="card" id="apiKeyCard">
+    <div class="ct" id="apiKeyTitle">🔑 Anthropic API Key</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1;font-family:monospace">
+      <button onclick="saveApiKey()" style="white-space:nowrap;padding:6px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:.78rem;font-weight:700;cursor:pointer">저장</button>
+    </div>
+    <div id="apiKeyStatus" style="font-size:.7rem;margin-top:6px;color:var(--sub)">API 키를 입력해 주세요</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tab1Label" onclick="switchTab('lc')"></div>
+    <div class="tab" id="tab2Label" onclick="switchTab('fd')"></div>
+    <div class="tab" id="tab3Label" onclick="switchTab('hist')"></div>
+  </div>
+
+  <!-- TAB1: LC 등록 -->
+  <div class="panel active" id="tab-lc">
+    <div class="card">
+      <div class="ct" id="t1CardTitle"></div>
+      <div class="crow">
+        <label id="contractLabel"></label>
+        <input type="text" id="lcContractNo" style="width:150px">
+        <label id="countryLabel" style="margin-left:4px"></label>
+        <select id="lcCountry"></select>
+      </div>
+      <div class="ubox" id="lcUpBox">
+        <input type="file" id="lcUpFile" accept=".pdf,image/*" multiple onchange="hfLc(this)">
+        <div class="ui">📄</div>
+        <div class="ul" id="lcUpLabel"></div>
+        <div class="un" id="lcUpName"></div>
+      </div>
+      <button class="btn btn-p" id="lcRegBtn" onclick="registerLC()" disabled></button>
+    </div>
+    <div class="card">
+      <div class="ct" id="lcListTitle"></div>
+      <div id="lcList"></div>
+    </div>
+    <div id="lcProg" style="display:none;margin-top:4px">
+      <div class="steps"><div class="step active" id="lcs1"></div><div class="step" id="lcs2"></div></div>
+      <div class="lmsg"><span class="spinner"></span><span id="lcLmsg"></span></div>
+    </div>
+  </div>
+
+  <!-- TAB2: FD 대조 -->
+  <div class="panel" id="tab-fd">
+    <div class="card">
+      <div class="ct" id="t2SelectTitle"></div>
+      <div id="lcSelectList"></div>
+    </div>
+    <div class="card">
+      <div class="ct" id="t2UpTitle"></div>
+      <div class="crow">
+        <label id="invLabel"></label>
+        <input type="text" id="fdInvNo" style="width:170px">
+      </div>
+      <div class="ubox" id="fdUpBox">
+        <input type="file" id="fdUpFile" accept=".pdf,image/*" multiple onchange="hfFd(this)">
+        <div class="ui">📋</div>
+        <div class="ul" id="fdUpLabel"></div>
+        <div class="un" id="fdUpName"></div>
+      </div>
+      <button class="btn btn-p" id="fdGoBtn" onclick="runFD()" disabled></button>
+    </div>
+    <div id="fdProg" style="display:none;margin-top:4px">
+      <div class="steps">
+        <div class="step" id="fds1"></div>
+        <div class="step" id="fds2"></div>
+        <div class="step" id="fds3"></div>
+      </div>
+      <div class="lmsg"><span class="spinner"></span><span id="fdLmsg"></span></div>
+    </div>
+    <div id="fdResult" style="display:none">
+      <div class="divider"></div>
+      <div id="fdRc"></div>
+      <button class="btn btn-s" style="margin-top:8px" id="fdNextBtn" onclick="clearFDResult()"></button>
+    </div>
+  </div>
+
+  <!-- TAB3: 이력 -->
+  <div class="panel" id="tab-hist">
+    <div class="card">
+      <div class="ct" id="histTitle"></div>
+      <div id="histList"></div>
+    </div>
+    <button class="btn btn-s" id="histClearBtn" onclick="clearHist()"></button>
+  </div>
+</div>
+
+<script>
+// ══ 다국어 텍스트 ══════════════════════════════════
+const T = {
+  ko: {
+    appTitle:'비교 체크 Tool', langSwitch:'日本語로 전환',
+    tab1:'① LC 등록', tab2:'② FD 대조', tab3:'③ 이력',
+    t1Card:'📄 LC 파일 업로드 & 등록', contractLabel:'계약번호:',
+    contractPh:'예) LN-2026-001', countryLabel:'수입국:',
+    lcUpLabel:'LC 파일 (PDF / 이미지)', lcUpDefault:'클릭하여 선택',
+    lcRegBtn:'📥 LC 분석 & 등록', lcListTitle:'💾 등록된 LC 목록',
+    lcEmpty:'등록된 LC가 없습니다', lcBadge:'등록완료', delBtn:'삭제',
+    lcs1:'① LC 읽기', lcs2:'② 저장',
+    lcAnalyzing:'LC를 읽고 분석 중...', lcSaving:'저장 중...',
+    lcRegistered:(c)=>`✅ 계약번호 "${c}" LC가 등록되었습니다!`,
+    lcDelConfirm:'이 LC를 삭제하시겠습니까?',
+    t2Select:'🗂 사용할 LC 선택', t2SelectEmpty:'먼저 ① LC 등록 탭에서 LC를 등록해 주세요',
+    selectedBadge:'선택됨 ✓', t2Up:'📋 FD 파일 업로드',
+    invLabel:'Invoice No.:', invPh:'예) LN-2026-001-01',
+    fdUpLabel:'FD 파일 복수 선택 가능', fdUpDefault:'클릭하여 선택',
+    fdGoBtn:'🔍 FD 대조 시작',
+    fds1:'① BL/IV 대조', fds2:'② PL/기타 대조', fds3:'③ 결과 정리',
+    fdStep1:'BL / Invoice 대조 중...', fdStep2:'PL / 보험 / 추가조건 대조 중...', fdStep3:'결과 정리 중...',
+    fdNextBtn:'🔄 다음 FD 대조',
+    verdict:(v)=>v==='OK'?'종합판정: OK ✅':v==='NG'?'종합판정: NG ❌':'종합판정: 요확인 ⚠️',
+    scoreOK:'✅ OK', scoreNG:'❌ NG', scoreWarn:'⚠️ 要確認',
+    docsTitle:'📑 必要書類（46A）枚数確認',
+    docName:'書類名', docLC:'LC指定', docFD:'FD準備', docStatus:'判定',
+    tobankTitle:'🏦 TO_BANK 특기사항',
+    summaryTitle:'📝 총합소견',
+    histTitle:'📚 대조 이력', histEmpty:'대조 이력이 없습니다',
+    histClearBtn:'🗑 이력 전체 삭제', histClearConfirm:'이력을 모두 삭제하시겠습니까?',
+    errPrefix:'⚠️ 에러: ',
+    countries:['기타','태국','베트남','인도네시아','필리핀','말레이시아'],
+  },
+  ja: {
+    appTitle:'照合チェックTool', langSwitch:'한국어로 전환',
+    tab1:'① LC登録', tab2:'② FD照合', tab3:'③ 履歴',
+    t1Card:'📄 LCファイルアップロード＆登録', contractLabel:'契約番号:',
+    contractPh:'例) LN-2026-001', countryLabel:'輸入国:',
+    lcUpLabel:'LCファイル (PDF / 画像)', lcUpDefault:'クリックして選択',
+    lcRegBtn:'📥 LC分析＆登録', lcListTitle:'💾 登録済みLCリスト',
+    lcEmpty:'登録されたLCはありません', lcBadge:'登録済', delBtn:'削除',
+    lcs1:'① LC読込', lcs2:'② 保存',
+    lcAnalyzing:'LCを読み込み・分析中...', lcSaving:'保存中...',
+    lcRegistered:(c)=>`✅ 契約番号「${c}」のLCを登録しました！`,
+    lcDelConfirm:'このLCを削除しますか？',
+    t2Select:'🗂 使用するLCを選択', t2SelectEmpty:'先に① LC登録タブでLCを登録してください',
+    selectedBadge:'選択中 ✓', t2Up:'📋 FDファイルアップロード',
+    invLabel:'Invoice No.:', invPh:'例) LN-2026-001-01',
+    fdUpLabel:'FDファイル（複数選択可）', fdUpDefault:'クリックして選択',
+    fdGoBtn:'🔍 FD照合開始',
+    fds1:'① BL/IV照合', fds2:'② PL/その他照合', fds3:'③ 結果整理',
+    fdStep1:'BL / Invoice 照合中...', fdStep2:'PL / 保険 / 追加条件 照合中...', fdStep3:'結果を整理中...',
+    fdNextBtn:'🔄 次のFD照合へ',
+    verdict:(v)=>v==='OK'?'総合判定: OK ✅':v==='NG'?'総合判定: NG ❌':'総合判定: 要確認 ⚠️',
+    scoreOK:'✅ OK', scoreNG:'❌ NG', scoreWarn:'⚠️ 要確認',
+    docsTitle:'📑 必要書類（46A）枚数確認',
+    docName:'書類名', docLC:'LC指定', docFD:'FD準備', docStatus:'判定',
+    tobankTitle:'🏦 TO_BANK 特記事項',
+    summaryTitle:'📝 総合所見',
+    histTitle:'📚 照合履歴', histEmpty:'照合履歴はありません',
+    histClearBtn:'🗑 履歴を全件削除', histClearConfirm:'履歴をすべて削除しますか？',
+    errPrefix:'⚠️ エラー: ',
+    countries:['その他','タイ','ベトナム','インドネシア','フィリピン','マレーシア'],
+  }
+};
+const COUNTRY_VALS = ['OTHER','THAILAND','VIETNAM','INDONESIA','PHILIPPINES','MALAYSIA'];
+
+let LANG = 'ko';
+const DB = {lcs:{}, history:[]};
+let selectedLcId = null;
+let fdFiles = [];
+let API_KEY = '';
+
+function saveApiKey(){
+  const val = document.getElementById('apiKeyInput').value.trim();
+  if(!val.startsWith('sk-ant-')){
+    document.getElementById('apiKeyStatus').textContent = '❌ 올바른 API 키 형식이 아닙니다 (sk-ant-... 로 시작해야 함)';
+    document.getElementById('apiKeyStatus').style.color = 'var(--ng)';
+    return;
+  }
+  API_KEY = val;
+  document.getElementById('apiKeyStatus').textContent = '✅ API 키가 설정되었습니다';
+  document.getElementById('apiKeyStatus').style.color = 'var(--ok)';
+  document.getElementById('apiKeyInput').value = '••••••••••••••••••••';
+}
+
+const SYS = `あなたはLEENEAR CORPORATIONの貿易書類専門家です。
+LEENEAR社内規則：LC番号記載形式「LC番号 DATED ON 日付」/ INVOICE・PL必須「COUNTRY OF ORIGIN : JAPAN」/ ADVISING BANK：SUMITOMO MITSUI BANKING CORPORATION / 1コンテナ1アイテム / TOLERANCE通常10% / FD（社内用）とTO_BANK（銀行提出）を区別`;
+
+function t(key, ...args) {
+  const v = T[LANG][key];
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+function initApp(lang) {
+  LANG = lang;
+  document.getElementById('langScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  applyLang();
+  renderLcList();
+}
+
+function backToLang() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('langScreen').style.display = 'flex';
+}
+
+function applyLang() {
+  const L = T[LANG];
+  document.getElementById('appTitle').textContent = L.appTitle;
+  document.getElementById('langSwitchBtn').textContent = L.langSwitch;
+  document.getElementById('tab1Label').textContent = L.tab1;
+  document.getElementById('tab2Label').textContent = L.tab2;
+  document.getElementById('tab3Label').textContent = L.tab3;
+  document.getElementById('t1CardTitle').textContent = L.t1Card;
+  document.getElementById('contractLabel').textContent = L.contractLabel;
+  document.getElementById('lcContractNo').placeholder = L.contractPh;
+  document.getElementById('countryLabel').textContent = L.countryLabel;
+  document.getElementById('lcUpLabel').textContent = L.lcUpLabel;
+  document.getElementById('lcUpName').textContent = L.lcUpDefault;
+  document.getElementById('lcRegBtn').textContent = L.lcRegBtn;
+  document.getElementById('lcListTitle').textContent = L.lcListTitle;
+  document.getElementById('lcs1').textContent = L.lcs1;
+  document.getElementById('lcs2').textContent = L.lcs2;
+  document.getElementById('t2SelectTitle').textContent = L.t2Select;
+  document.getElementById('t2UpTitle').textContent = L.t2Up;
+  document.getElementById('invLabel').textContent = L.invLabel;
+  document.getElementById('fdInvNo').placeholder = L.invPh;
+  document.getElementById('fdUpLabel').textContent = L.fdUpLabel;
+  document.getElementById('fdUpName').textContent = L.fdUpDefault;
+  document.getElementById('fdGoBtn').textContent = L.fdGoBtn;
+  document.getElementById('fds1').textContent = L.fds1;
+  document.getElementById('fds2').textContent = L.fds2;
+  document.getElementById('fds3').textContent = L.fds3;
+  document.getElementById('fdNextBtn').textContent = L.fdNextBtn;
+  document.getElementById('histTitle').textContent = L.histTitle;
+  document.getElementById('histClearBtn').textContent = L.histClearBtn;
+  // Country select
+  const sel = document.getElementById('lcCountry');
+  const cur = sel.value;
+  sel.innerHTML = COUNTRY_VALS.map((v,i)=>`<option value="${v}">${L.countries[i]}</option>`).join('');
+  sel.value = cur || 'OTHER';
+  renderLcList();
+  renderLcSelectList();
+  renderHist();
+}
+
+function switchLang() {
+  LANG = LANG === 'ko' ? 'ja' : 'ko';
+  applyLang();
+}
+// lang switch button calls switchLang via backToLang replacement
+document.getElementById('langSwitchBtn') && (document.querySelector('.lang-switch button').onclick = switchLang);
+// fix: reassign after DOM ready
+setTimeout(()=>{
+  const btn = document.querySelector('.lang-switch button');
+  if(btn) btn.onclick = switchLang;
+},0);
+
+// ══ Tab ══
+function switchTab(t){
+  ['lc','fd','hist'].forEach((id,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',id===t);
+    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+  });
+  if(t==='fd') renderLcSelectList();
+  if(t==='hist') renderHist();
+}
+
+// ══ File helpers ══
+async function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
+function mtype(f){return f.type||(f.name.endsWith('.pdf')?'application/pdf':'image/jpeg');}
+async function fc(arr){
+  const out=[];
+  for(const f of arr){const d=await b64(f),m=mtype(f);
+    out.push(m==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:d}}:{type:'image',source:{type:'base64',media_type:m,data:d}});}
+  return out;
+}
+async function api(msgs,max=3000){
+  if(!API_KEY){ throw new Error('API 키가 설정되지 않았습니다. 상단 입력란에 API 키를 먼저 입력해 주세요.'); }
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max,system:SYS,messages:msgs})});
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.message);
+  return d.content.map(b=>b.text||'').join('');
+}
+function setS(ids,n){ids.forEach((id,i)=>{const e=document.getElementById(id);if(e)e.className='step'+(i+1<n?' done':i+1===n?' active':'');});}
+
+// ══ LC 등록 ══
+function hfLc(inp){
+  const fs=Array.from(inp.files);
+  document.getElementById('lcUpBox').classList.toggle('has',fs.length>0);
+  document.getElementById('lcUpName').textContent=fs.length?fs.map(f=>f.name).join(', '):t('lcUpDefault');
+  document.getElementById('lcRegBtn').disabled=!fs.length;
+}
+
+async function registerLC(){
+  const contractNo=document.getElementById('lcContractNo').value.trim();
+  const country=document.getElementById('lcCountry').value;
+  const files=Array.from(document.getElementById('lcUpFile').files);
+  if(!files.length)return;
+  document.getElementById('lcRegBtn').disabled=true;
+  document.getElementById('lcProg').style.display='block';
+  setS(['lcs1','lcs2'],1);
+  document.getElementById('lcLmsg').textContent=t('lcAnalyzing');
+  try{
+    const lcC=await fc(files);
+    const raw=await api([{role:'user',content:[...lcC,{type:'text',text:
+`このLCの以下の項目を「項目名: 値」の形式で1行ずつ出力してください。プレーンテキストのみ。
+LC番号と日付, 発行銀行(ISSUING BANK), 申請者(APPLICANT), 受益者(BENEFICIARY), 有効期限(EXPIRY DATE), 最終船積日(LATEST SHIPMENT DATE), 積地(POL), 揚地(POD), PARTIAL SHIPMENT, TRANSHIPMENT, TOLERANCE, 通貨・金額, BL CONSIGNEE(46Aより正確に), BL NOTIFY PARTY, FREIGHT条件, 保険条件, 45A商品説明(全文そのまま), 47A追加条件(全文そのまま), 46A必要書類リスト(各書類名と枚数)`}]}],3000);
+    setS(['lcs1','lcs2'],2);
+    document.getElementById('lcLmsg').textContent=t('lcSaving');
+    const id='lc_'+(contractNo||Date.now());
+    DB.lcs[id]={id,contractNo:contractNo||'(미입력/未入力)',country,rawText:raw,
+      registeredAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),files:files.map(f=>f.name)};
+    await new Promise(r=>setTimeout(r,300));
+    document.getElementById('lcProg').style.display='none';
+    document.getElementById('lcRegBtn').disabled=false;
+    document.getElementById('lcUpFile').value='';
+    document.getElementById('lcUpBox').classList.remove('has');
+    document.getElementById('lcUpName').textContent=t('lcUpDefault');
+    renderLcList();
+    alert(t('lcRegistered', contractNo||id));
+  }catch(e){
+    document.getElementById('lcProg').style.display='none';
+    document.getElementById('lcRegBtn').disabled=false;
+    alert(t('errPrefix')+e.message);
+  }
+}
+
+function renderLcList(){
+  const el=document.getElementById('lcList');
+  if(!el)return;
+  const items=Object.values(DB.lcs);
+  if(!items.length){el.innerHTML=`<div class="empty">${t('lcEmpty')}</div>`;return;}
+  el.innerHTML=items.map(lc=>`
+    <div class="lc-item">
+      <div class="lc-head">
+        <div>
+          <div class="lc-title">📄 ${lc.contractNo}</div>
+          <div class="lc-meta">${lc.country} | ${lc.registeredAt}</div>
+          <div class="lc-meta" style="font-size:.62rem;margin-top:1px">${lc.files.join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="lc-badge">${t('lcBadge')}</span>
+          <button class="del-btn" onclick="deleteLc('${lc.id}',event)">${t('delBtn')}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function deleteLc(id,e){
+  e.stopPropagation();
+  if(!confirm(t('lcDelConfirm')))return;
+  delete DB.lcs[id];
+  if(selectedLcId===id)selectedLcId=null;
+  renderLcList();
+}
+
+function renderLcSelectList(){
+  const el=document.getElementById('lcSelectList');
+  if(!el)return;
+  const items=Object.values(DB.lcs);
+  if(!items.length){el.innerHTML=`<div class="empty">${t('t2SelectEmpty')}</div>`;updateFdBtn();return;}
+  el.innerHTML=items.map(lc=>`
+    <div class="lc-item${selectedLcId===lc.id?' selected':''}" onclick="selectLc('${lc.id}')">
+      <div class="lc-head">
+        <div>
+          <div class="lc-title">📄 ${lc.contractNo}</div>
+          <div class="lc-meta">${lc.country} | ${lc.registeredAt}</div>
+        </div>
+        ${selectedLcId===lc.id?`<span class="lc-badge">${t('selectedBadge')}</span>`:''}
+      </div>
+    </div>`).join('');
+  updateFdBtn();
+}
+
+function selectLc(id){selectedLcId=id;renderLcSelectList();}
+
+// ══ FD 대조 ══
+function hfFd(inp){
+  fdFiles=Array.from(inp.files);
+  document.getElementById('fdUpBox').classList.toggle('has',fdFiles.length>0);
+  document.getElementById('fdUpName').textContent=fdFiles.length?fdFiles.map(f=>f.name).join(', '):t('fdUpDefault');
+  updateFdBtn();
+}
+function updateFdBtn(){
+  document.getElementById('fdGoBtn').disabled=!(selectedLcId&&fdFiles.length);
+}
+
+async function runFD(){
+  const lc=DB.lcs[selectedLcId];
+  if(!lc)return;
+  const invNo=document.getElementById('fdInvNo').value.trim();
+  const cNote=lc.country==='THAILAND'?'【THAILAND】全書類にSHIPPING MARK必須。'
+    :lc.country==='VIETNAM'?'【VIETNAM】BL NOTIFY PARTYはTAX ID#/IMPORT LICENC NO#/DEPOSIT NUMBER#/APPLICANT#/ADDRESS#/TEL#/FAX#/EMAIL形式必須。':'';
+  document.getElementById('fdGoBtn').disabled=true;
+  document.getElementById('fdProg').style.display='block';
+  document.getElementById('fdResult').style.display='none';
+  setS(['fds1','fds2','fds3'],1);
+  try{
+    const fdC=await fc(fdFiles);
+    const lcInfo=lc.rawText;
+    document.getElementById('fdLmsg').textContent=t('fdStep1');
+    const r1=await api([{role:'user',content:[...fdC,{type:'text',text:
+`FD書類（BL・INVOICE）を以下のLC条件と照合してください。
+--- LC条件 ---\n${lcInfo}\n--- 照合情報 ---
+Invoice No: ${invNo||'未入力'} / 対象国: ${lc.country} ${cNote}
+各チェック項目を以下の形式で出力。JSON不要。
+形式: [OK/NG/WARN] カテゴリ名 > 項目名 | 説明
+チェック対象: LC番号記載, 有効期限, BL CONSIGNEE, BL NOTIFY PARTY, FREIGHT条件, ON BOARD表記, POL, POD, 最終船積日, INVOICE 45A商品説明一致, COUNTRY OF ORIGIN JAPAN, 金額, 数量・TOLERANCE, PARTIAL条件`}]}],3000);
+
+    setS(['fds1','fds2','fds3'],2);
+    document.getElementById('fdLmsg').textContent=t('fdStep2');
+    const r2=await api([{role:'user',content:[...fdC,{type:'text',text:
+`FD書類（PACKING LIST・保険・その他）を以下のLC条件と照合してください。
+--- LC条件 ---\n${lcInfo}\n対象国: ${lc.country} ${cNote}
+チェック結果:
+形式: [OK/NG/WARN] カテゴリ名 > 項目名 | 説明
+必要書類枚数:
+形式: DOCS: 書類名 | LC指定枚数 | FD準備枚数 | OK/NG/WARN
+必ず最後に出力:
+TOBANK: （DRAFTへの必須記載事項。47A ALL DOCUMENTがあれば具体的に）
+SUMMARY: （総合所見。修正必須事項を優先）
+OVERALL: OK または NG または WARN`}]}],3000);
+
+    setS(['fds1','fds2','fds3'],3);
+    document.getElementById('fdLmsg').textContent=t('fdStep3');
+    await new Promise(r=>setTimeout(r,300));
+    const result=parseAndRender(r1+'\n'+r2, invNo, lc);
+    DB.history.unshift({contractNo:lc.contractNo,invNo:invNo||'-',country:lc.country,
+      overall:result.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),html:document.getElementById('fdRc').innerHTML});
+    document.getElementById('fdProg').style.display='none';
+    document.getElementById('fdResult').style.display='block';
+    document.getElementById('fdGoBtn').disabled=false;
+  }catch(e){
+    document.getElementById('fdProg').style.display='none';
+    document.getElementById('fdResult').style.display='block';
+    document.getElementById('fdRc').innerHTML=`<div class="err">${t('errPrefix')}${e.message}</div>`;
+    document.getElementById('fdGoBtn').disabled=false;
+  }
+}
+
+function parseAndRender(raw, invNo, lc){
+  const checkLines=raw.split('\n').filter(l=>/^\[(OK|NG|WARN)\]/.test(l.trim()));
+  const docLines=raw.split('\n').filter(l=>l.trim().startsWith('DOCS:'));
+  const tobankM=raw.match(/TOBANK:\s*(.+?)(?=\nSUMMARY:|$)/s);
+  const summaryM=raw.match(/SUMMARY:\s*(.+?)(?=\nOVERALL:|$)/s);
+  const overallM=raw.match(/OVERALL:\s*(OK|NG|WARN)/);
+  const catMap={};
+  checkLines.forEach(l=>{
+    const m=l.trim().match(/^\[(OK|NG|WARN)\]\s*(.+?)\s*>\s*(.+?)\s*\|\s*(.*)$/);
+    if(!m)return;
+    const[,status,cat,title,detail]=m;
+    if(!catMap[cat])catMap[cat]=[];
+    catMap[cat].push({status,title,detail});
+  });
+  const docs=docLines.map(l=>{const p=l.replace(/^DOCS:\s*/,'').split('|').map(s=>s.trim());return{name:p[0]||'',lc:p[1]||'-',fd:p[2]||'-',status:p[3]||'WARN'};});
+  const overall=overallM?overallM[1]:'WARN';
+  const tobank=tobankM?tobankM[1].trim():'';
+  const summary=summaryM?summaryM[1].trim():'';
+  let ok=0,ng=0,warn=0;
+  Object.values(catMap).forEach(items=>items.forEach(i=>{if(i.status==='OK')ok++;else if(i.status==='NG')ng++;else warn++;}));
+  const oc=overall==='OK'?'#22c55e':overall==='NG'?'#ef4444':'#f59e0b';
+  const oe=overall==='OK'?'✅':overall==='NG'?'❌':'⚠️';
+  let html=`<div class="verdict"><span style="font-size:1.8rem">${oe}</span>
+    <div><div class="v-text" style="color:${oc}">${t('verdict',overall)}</div>
+    <div class="v-sub">${lc.contractNo} | ${lc.country}${invNo?' | Invoice: '+invNo:''}</div></div></div>
+    <div class="srow">
+      <div class="sc"><div class="sn ok">${ok}</div><div class="sl">${t('scoreOK')}</div></div>
+      <div class="sc"><div class="sn ng">${ng}</div><div class="sl">${t('scoreNG')}</div></div>
+      <div class="sc"><div class="sn warn">${warn}</div><div class="sl">${t('scoreWarn')}</div></div>
+    </div>`;
+  Object.entries(catMap).forEach(([cat,items])=>{
+    const cn=items.filter(i=>i.status==='NG').length,cw=items.filter(i=>i.status==='WARN').length;
+    const bh=cn>0?`<span class="badge b-ng">NG ${cn}</span>`:cw>0?`<span class="badge b-w">要確認 ${cw}</span>`:`<span class="badge b-ok">OK</span>`;
+    html+=`<div class="sh"><span class="st">${cat}</span>${bh}</div>`;
+    items.forEach(i=>{
+      const cl=i.status==='OK'?'ok':i.status==='NG'?'ng':'warn';
+      const ic=i.status==='OK'?'✅':i.status==='NG'?'❌':'⚠️';
+      html+=`<div class="ci ${cl}"><span style="font-size:.9rem;flex-shrink:0">${ic}</span>
+        <div><div class="ctit">${i.title}</div><div class="cdesc">${i.detail}</div></div></div>`;
+    });
+  });
+  if(docs.length){
+    html+=`<div class="sh"><span class="st">${t('docsTitle')}</span></div>
+    <div class="card" style="padding:9px"><table><tr><th>${t('docName')}</th><th>${t('docLC')}</th><th>${t('docFD')}</th><th>${t('docStatus')}</th></tr>`;
+    docs.forEach(d=>{
+      const sc=d.status==='OK'?'var(--ok)':d.status==='NG'?'var(--ng)':'var(--warn)';
+      const si=d.status==='OK'?'✅':d.status==='NG'?'❌':'⚠️';
+      html+=`<tr><td>${d.name}</td><td style="text-align:center">${d.lc}</td><td style="text-align:center">${d.fd}</td><td style="text-align:center;color:${sc}">${si}</td></tr>`;
+    });
+    html+='</table></div>';
+  }
+  if(tobank)html+=`<div class="sh"><span class="st">${t('tobankTitle')}</span></div><div class="sbox">${tobank}</div>`;
+  if(summary)html+=`<div class="sh"><span class="st">${t('summaryTitle')}</span></div><div class="sbox">${summary}</div>`;
+  document.getElementById('fdRc').innerHTML=html;
+  return{overall};
+}
+
+function clearFDResult(){
+  fdFiles=[];
+  document.getElementById('fdUpFile').value='';
+  document.getElementById('fdUpBox').classList.remove('has');
+  document.getElementById('fdUpName').textContent=t('fdUpDefault');
+  document.getElementById('fdInvNo').value='';
+  document.getElementById('fdResult').style.display='none';
+  document.getElementById('fdRc').innerHTML='';
+  updateFdBtn();
+}
+
+// ══ 이력 ══
+function renderHist(){
+  const el=document.getElementById('histList');
+  if(!el)return;
+  if(!DB.history.length){el.innerHTML=`<div class="empty">${t('histEmpty')}</div>`;return;}
+  el.innerHTML=DB.history.map((h,i)=>{
+    const vc=h.overall==='OK'?'var(--ok)':h.overall==='NG'?'var(--ng)':'var(--warn)';
+    const ve=h.overall==='OK'?'✅':h.overall==='NG'?'❌':'⚠️';
+    return`<div class="hist-item" onclick="showHistDetail(${i})">
+      <div class="hist-head">
+        <div><div class="hist-title">📄 ${h.contractNo} — ${h.invNo}</div>
+        <div class="hist-meta">${h.country} | ${h.checkedAt}</div></div>
+        <div style="font-size:.75rem;font-weight:700;color:${vc}">${ve} ${h.overall}</div>
+      </div></div>`;}).join('');
+}
+function showHistDetail(i){
+  const h=DB.history[i];
+  document.getElementById('fdRc').innerHTML=h.html;
+  document.getElementById('fdResult').style.display='block';
+  switchTab('fd');
+  setTimeout(()=>document.getElementById('fdResult').scrollIntoView({behavior:'smooth'}),100);
+}
+function clearHist(){
+  if(!confirm(t('histClearConfirm')))return;
+  DB.history=[];renderHist();
+}
+</script>
+</body>
+</html>
