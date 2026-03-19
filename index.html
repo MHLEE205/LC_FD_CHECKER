@@ -3,26 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LC/FD 비교 체크</title>
+<title>LC/FD 비교 체크 — LEENEAR</title>
 <style>
 :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;--accent:#4f7cff;--accent2:#7c4fff;--ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--text:#e8eaf0;--sub:#8b90a8;--r:12px;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;padding:20px 14px;}
 h1{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:3px;}
 .sub{font-size:.73rem;color:var(--sub);margin-bottom:16px;}
-/* Lang select screen */
 #langScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;}
 .lang-title{font-size:1.1rem;font-weight:700;color:var(--sub);text-align:center;}
 .lang-btns{display:flex;gap:16px;}
 .lang-btn{padding:18px 36px;border:2px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .2s;text-align:center;}
 .lang-btn:hover{border-color:var(--accent);background:rgba(79,124,255,.1);}
 .lang-btn span{display:block;font-size:.72rem;color:var(--sub);margin-top:4px;font-weight:400;}
-/* Main app */
 #app{display:none;}
 .lang-switch{text-align:right;margin-bottom:10px;}
 .lang-switch button{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--sub);padding:4px 10px;font-size:.7rem;cursor:pointer;}
 .lang-switch button:hover{border-color:var(--accent);color:var(--text);}
-/* Tabs */
 .tabs{display:flex;gap:4px;margin-bottom:14px;}
 .tab{flex:1;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--sub);font-size:.78rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;}
 .tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;}
@@ -39,8 +36,8 @@ h1{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,var(--acce
 .un{font-size:.66rem;color:var(--ok);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .crow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .crow label{font-size:.76rem;color:var(--sub);white-space:nowrap;}
-select,input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 9px;font-size:.78rem;outline:none;}
-select:focus,input[type=text]:focus{border-color:var(--accent);}
+select,input[type=text],input[type=password]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 9px;font-size:.78rem;outline:none;}
+select:focus,input:focus{border-color:var(--accent);}
 .btn{width:100%;padding:11px;border:none;border-radius:9px;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .2s;}
 .btn-p{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
 .btn-p:hover{opacity:.88;transform:translateY(-1px);}
@@ -98,7 +95,6 @@ td{padding:4px 5px;border-bottom:1px solid var(--border);}
 </head>
 <body>
 
-<!-- 언어 선택 화면 -->
 <div id="langScreen">
   <div class="lang-title">🔍 LC / FD 비교 체크 Tool<br><span style="font-size:.85rem;font-weight:400">LEENEAR CORPORATION</span></div>
   <div class="lang-btns">
@@ -107,14 +103,13 @@ td{padding:4px 5px;border-bottom:1px solid var(--border);}
   </div>
 </div>
 
-<!-- 메인 앱 -->
 <div id="app">
-  <div class="lang-switch"><button onclick="backToLang()">🌐 <span id="langSwitchBtn"></span></button></div>
+  <div class="lang-switch"><button id="langSwitchBtnWrap">🌐 <span id="langSwitchBtn"></span></button></div>
   <h1>🔍 LC / FD <span id="appTitle"></span></h1>
-  <p class="sub">LEENEAR CORPORATION — v5 (API Key 対応)</p>
+  <p class="sub">LEENEAR CORPORATION — v5</p>
 
   <!-- API 키 입력 -->
-  <div class="card" id="apiKeyCard">
+  <div class="card">
     <div class="ct">🔑 Anthropic API Key</div>
     <div style="display:flex;gap:8px;align-items:center">
       <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1;font-family:monospace;font-size:.75rem">
@@ -122,8 +117,6 @@ td{padding:4px 5px;border-bottom:1px solid var(--border);}
     </div>
     <div id="apiKeyStatus" style="font-size:.7rem;margin-top:6px;color:var(--sub)">API 키를 입력해 주세요 / APIキーを入力してください</div>
   </div>
-
-
 
   <div class="tabs">
     <div class="tab active" id="tab1Label" onclick="switchTab('lc')"></div>
@@ -205,177 +198,158 @@ td{padding:4px 5px;border-bottom:1px solid var(--border);}
 </div>
 
 <script>
-// ══ 다국어 텍스트 ══════════════════════════════════
-const T = {
-  ko: {
-    appTitle:'비교 체크 Tool', langSwitch:'日本語로 전환',
-    tab1:'① LC 등록', tab2:'② FD 대조', tab3:'③ 이력',
-    t1Card:'📄 LC 파일 업로드 & 등록', contractLabel:'계약번호:',
-    contractPh:'예) LN-2026-001', countryLabel:'수입국:',
-    lcUpLabel:'LC 파일 (PDF / 이미지)', lcUpDefault:'클릭하여 선택',
-    lcRegBtn:'📥 LC 분석 & 등록', lcListTitle:'💾 등록된 LC 목록',
-    lcEmpty:'등록된 LC가 없습니다', lcBadge:'등록완료', delBtn:'삭제',
-    lcs1:'① LC 읽기', lcs2:'② 저장',
-    lcAnalyzing:'LC를 읽고 분석 중...', lcSaving:'저장 중...',
+const T={
+  ko:{
+    appTitle:'비교 체크 Tool',langSwitch:'日本語로 전환',
+    tab1:'① LC 등록',tab2:'② FD 대조',tab3:'③ 이력',
+    t1Card:'📄 LC 파일 업로드 & 등록',contractLabel:'계약번호:',
+    contractPh:'예) LN-2026-001',countryLabel:'수입국:',
+    lcUpLabel:'LC 파일 (PDF / 이미지)',lcUpDefault:'클릭하여 선택',
+    lcRegBtn:'📥 LC 분석 & 등록',lcListTitle:'💾 등록된 LC 목록',
+    lcEmpty:'등록된 LC가 없습니다',lcBadge:'등록완료',delBtn:'삭제',
+    lcs1:'① LC 읽기',lcs2:'② 저장',
+    lcAnalyzing:'LC를 읽고 분석 중...',lcSaving:'저장 중...',
     lcRegistered:(c)=>`✅ 계약번호 "${c}" LC가 등록되었습니다!`,
     lcDelConfirm:'이 LC를 삭제하시겠습니까?',
-    t2Select:'🗂 사용할 LC 선택', t2SelectEmpty:'먼저 ① LC 등록 탭에서 LC를 등록해 주세요',
-    selectedBadge:'선택됨 ✓', t2Up:'📋 FD 파일 업로드',
-    invLabel:'Invoice No.:', invPh:'예) LN-2026-001-01',
-    fdUpLabel:'FD 파일 복수 선택 가능', fdUpDefault:'클릭하여 선택',
+    t2Select:'🗂 사용할 LC 선택',t2SelectEmpty:'먼저 ① LC 등록 탭에서 LC를 등록해 주세요',
+    selectedBadge:'선택됨 ✓',t2Up:'📋 FD 파일 업로드',
+    invLabel:'Invoice No.:',invPh:'예) LN-2026-001-01',
+    fdUpLabel:'FD 파일 복수 선택 가능',fdUpDefault:'클릭하여 선택',
     fdGoBtn:'🔍 FD 대조 시작',
-    fds1:'① BL/IV 대조', fds2:'② PL/기타 대조', fds3:'③ 결과 정리',
-    fdStep1:'BL / Invoice 대조 중...', fdStep2:'PL / 보험 / 추가조건 대조 중...', fdStep3:'결과 정리 중...',
+    fds1:'① BL/IV 대조',fds2:'② PL/기타 대조',fds3:'③ 결과 정리',
+    fdStep1:'BL / Invoice 대조 중...',fdStep2:'PL / 보험 / 추가조건 대조 중...',fdStep3:'결과 정리 중...',
     fdNextBtn:'🔄 다음 FD 대조',
     verdict:(v)=>v==='OK'?'종합판정: OK ✅':v==='NG'?'종합판정: NG ❌':'종합판정: 요확인 ⚠️',
-    scoreOK:'✅ OK', scoreNG:'❌ NG', scoreWarn:'⚠️ 要確認',
+    scoreOK:'✅ OK',scoreNG:'❌ NG',scoreWarn:'⚠️ 要確認',
     docsTitle:'📑 必要書類（46A）枚数確認',
-    docName:'書類名', docLC:'LC指定', docFD:'FD準備', docStatus:'判定',
-    tobankTitle:'🏦 TO_BANK 특기사항',
-    summaryTitle:'📝 총합소견',
-    histTitle:'📚 대조 이력', histEmpty:'대조 이력이 없습니다',
-    histClearBtn:'🗑 이력 전체 삭제', histClearConfirm:'이력을 모두 삭제하시겠습니까?',
+    docName:'書類名',docLC:'LC指定',docFD:'FD準備',docStatus:'判定',
+    tobankTitle:'🏦 TO_BANK 특기사항',summaryTitle:'📝 총합소견',
+    histTitle:'📚 대조 이력',histEmpty:'대조 이력이 없습니다',
+    histClearBtn:'🗑 이력 전체 삭제',histClearConfirm:'이력을 모두 삭제하시겠습니까?',
     errPrefix:'⚠️ 에러: ',
     countries:['기타','태국','베트남','인도네시아','필리핀','말레이시아'],
   },
-  ja: {
-    appTitle:'照合チェックTool', langSwitch:'한국어로 전환',
-    tab1:'① LC登録', tab2:'② FD照合', tab3:'③ 履歴',
-    t1Card:'📄 LCファイルアップロード＆登録', contractLabel:'契約番号:',
-    contractPh:'例) LN-2026-001', countryLabel:'輸入国:',
-    lcUpLabel:'LCファイル (PDF / 画像)', lcUpDefault:'クリックして選択',
-    lcRegBtn:'📥 LC分析＆登録', lcListTitle:'💾 登録済みLCリスト',
-    lcEmpty:'登録されたLCはありません', lcBadge:'登録済', delBtn:'削除',
-    lcs1:'① LC読込', lcs2:'② 保存',
-    lcAnalyzing:'LCを読み込み・分析中...', lcSaving:'保存中...',
+  ja:{
+    appTitle:'照合チェックTool',langSwitch:'한국어로 전환',
+    tab1:'① LC登録',tab2:'② FD照合',tab3:'③ 履歴',
+    t1Card:'📄 LCファイルアップロード＆登録',contractLabel:'契約番号:',
+    contractPh:'例) LN-2026-001',countryLabel:'輸入国:',
+    lcUpLabel:'LCファイル (PDF / 画像)',lcUpDefault:'クリックして選択',
+    lcRegBtn:'📥 LC分析＆登録',lcListTitle:'💾 登録済みLCリスト',
+    lcEmpty:'登録されたLCはありません',lcBadge:'登録済',delBtn:'削除',
+    lcs1:'① LC読込',lcs2:'② 保存',
+    lcAnalyzing:'LCを読み込み・分析中...',lcSaving:'保存中...',
     lcRegistered:(c)=>`✅ 契約番号「${c}」のLCを登録しました！`,
     lcDelConfirm:'このLCを削除しますか？',
-    t2Select:'🗂 使用するLCを選択', t2SelectEmpty:'先に① LC登録タブでLCを登録してください',
-    selectedBadge:'選択中 ✓', t2Up:'📋 FDファイルアップロード',
-    invLabel:'Invoice No.:', invPh:'例) LN-2026-001-01',
-    fdUpLabel:'FDファイル（複数選択可）', fdUpDefault:'クリックして選択',
+    t2Select:'🗂 使用するLCを選択',t2SelectEmpty:'先に① LC登録タブでLCを登録してください',
+    selectedBadge:'選択中 ✓',t2Up:'📋 FDファイルアップロード',
+    invLabel:'Invoice No.:',invPh:'例) LN-2026-001-01',
+    fdUpLabel:'FDファイル（複数選択可）',fdUpDefault:'クリックして選択',
     fdGoBtn:'🔍 FD照合開始',
-    fds1:'① BL/IV照合', fds2:'② PL/その他照合', fds3:'③ 結果整理',
-    fdStep1:'BL / Invoice 照合中...', fdStep2:'PL / 保険 / 追加条件 照合中...', fdStep3:'結果を整理中...',
+    fds1:'① BL/IV照合',fds2:'② PL/その他照合',fds3:'③ 結果整理',
+    fdStep1:'BL / Invoice 照合中...',fdStep2:'PL / 保険 / 追加条件 照合中...',fdStep3:'結果を整理中...',
     fdNextBtn:'🔄 次のFD照合へ',
     verdict:(v)=>v==='OK'?'総合判定: OK ✅':v==='NG'?'総合判定: NG ❌':'総合判定: 要確認 ⚠️',
-    scoreOK:'✅ OK', scoreNG:'❌ NG', scoreWarn:'⚠️ 要確認',
+    scoreOK:'✅ OK',scoreNG:'❌ NG',scoreWarn:'⚠️ 要確認',
     docsTitle:'📑 必要書類（46A）枚数確認',
-    docName:'書類名', docLC:'LC指定', docFD:'FD準備', docStatus:'判定',
-    tobankTitle:'🏦 TO_BANK 特記事項',
-    summaryTitle:'📝 総合所見',
-    histTitle:'📚 照合履歴', histEmpty:'照合履歴はありません',
-    histClearBtn:'🗑 履歴を全件削除', histClearConfirm:'履歴をすべて削除しますか？',
+    docName:'書類名',docLC:'LC指定',docFD:'FD準備',docStatus:'判定',
+    tobankTitle:'🏦 TO_BANK 特記事項',summaryTitle:'📝 総合所見',
+    histTitle:'📚 照合履歴',histEmpty:'照合履歴はありません',
+    histClearBtn:'🗑 履歴を全件削除',histClearConfirm:'履歴をすべて削除しますか？',
     errPrefix:'⚠️ エラー: ',
     countries:['その他','タイ','ベトナム','インドネシア','フィリピン','マレーシア'],
   }
 };
-const COUNTRY_VALS = ['OTHER','THAILAND','VIETNAM','INDONESIA','PHILIPPINES','MALAYSIA'];
+const COUNTRY_VALS=['OTHER','THAILAND','VIETNAM','INDONESIA','PHILIPPINES','MALAYSIA'];
+let LANG='ko', selectedLcId=null, fdFiles=[], API_KEY='';
+// LC 데이터는 localStorage에 영구 저장 (GitHub Pages 환경)
+const DB={lcs:{},history:[]};
 
-let LANG = 'ko';
-const DB = {lcs:{}, history:[]};
-let selectedLcId = null;
-let fdFiles = [];
-let API_KEY = '';
-
-function saveApiKey(){
-  const val = document.getElementById('apiKeyInput').value.trim();
-  if(!val.startsWith('sk-ant-')){
-    document.getElementById('apiKeyStatus').textContent = '❌ 형식 오류 / 形式エラー (sk-ant-... で始まること)';
-    document.getElementById('apiKeyStatus').style.color = 'var(--ng)';
-    return;
-  }
-  API_KEY = val;
-  document.getElementById('apiKeyStatus').textContent = '✅ API 키 설정 완료 / APIキー設定済み';
-  document.getElementById('apiKeyStatus').style.color = 'var(--ok)';
-  document.getElementById('apiKeyInput').value = '••••••••••••••••••••••••';
-}
-
-
-const SYS = `あなたはLEENEAR CORPORATIONの貿易書類専門家です。
+const SYS=`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
 LEENEAR社内規則：LC番号記載形式「LC番号 DATED ON 日付」/ INVOICE・PL必須「COUNTRY OF ORIGIN : JAPAN」/ ADVISING BANK：SUMITOMO MITSUI BANKING CORPORATION / 1コンテナ1アイテム / TOLERANCE通常10% / FD（社内用）とTO_BANK（銀行提出）を区別`;
 
-function t(key, ...args) {
-  const v = T[LANG][key];
-  return typeof v === 'function' ? v(...args) : v;
+function t(key,...args){const v=T[LANG][key];return typeof v==='function'?v(...args):v;}
+
+// ══ localStorage 저장/불러오기 ══
+function saveLCsToStorage(){
+  try{localStorage.setItem('leenear_lcs',JSON.stringify(DB.lcs));}catch(e){}
+}
+function loadLCsFromStorage(){
+  try{
+    const d=localStorage.getItem('leenear_lcs');
+    if(d){const parsed=JSON.parse(d);Object.assign(DB.lcs,parsed);}
+  }catch(e){}
+  renderLcList();renderLcSelectList();
 }
 
-function initApp(lang) {
-  LANG = lang;
-  document.getElementById('langScreen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
+function saveApiKey(){
+  const val=document.getElementById('apiKeyInput').value.trim();
+  if(!val.startsWith('sk-ant-')){
+    document.getElementById('apiKeyStatus').textContent='❌ 형식 오류 (sk-ant-... 로 시작해야 함)';
+    document.getElementById('apiKeyStatus').style.color='var(--ng)';return;
+  }
+  API_KEY=val;
+  document.getElementById('apiKeyStatus').textContent='✅ API 키 설정 완료 / APIキー設定済み';
+  document.getElementById('apiKeyStatus').style.color='var(--ok)';
+  document.getElementById('apiKeyInput').value='••••••••••••••••••••••••';
+}
+
+function initApp(lang){
+  LANG=lang;
+  document.getElementById('langScreen').style.display='none';
+  document.getElementById('app').style.display='block';
   applyLang();
-  loadSavedLCs(); // 저장된 LC 불러오기
+  loadLCsFromStorage();
 }
 
-function backToLang() {
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('langScreen').style.display = 'flex';
+function applyLang(){
+  const L=T[LANG];
+  document.getElementById('appTitle').textContent=L.appTitle;
+  document.getElementById('langSwitchBtn').textContent=L.langSwitch;
+  document.getElementById('tab1Label').textContent=L.tab1;
+  document.getElementById('tab2Label').textContent=L.tab2;
+  document.getElementById('tab3Label').textContent=L.tab3;
+  document.getElementById('t1CardTitle').textContent=L.t1Card;
+  document.getElementById('contractLabel').textContent=L.contractLabel;
+  document.getElementById('lcContractNo').placeholder=L.contractPh;
+  document.getElementById('countryLabel').textContent=L.countryLabel;
+  document.getElementById('lcUpLabel').textContent=L.lcUpLabel;
+  document.getElementById('lcUpName').textContent=L.lcUpDefault;
+  document.getElementById('lcRegBtn').textContent=L.lcRegBtn;
+  document.getElementById('lcListTitle').textContent=L.lcListTitle;
+  document.getElementById('lcs1').textContent=L.lcs1;
+  document.getElementById('lcs2').textContent=L.lcs2;
+  document.getElementById('t2SelectTitle').textContent=L.t2Select;
+  document.getElementById('t2UpTitle').textContent=L.t2Up;
+  document.getElementById('invLabel').textContent=L.invLabel;
+  document.getElementById('fdInvNo').placeholder=L.invPh;
+  document.getElementById('fdUpLabel').textContent=L.fdUpLabel;
+  document.getElementById('fdUpName').textContent=L.fdUpDefault;
+  document.getElementById('fdGoBtn').textContent=L.fdGoBtn;
+  document.getElementById('fds1').textContent=L.fds1;
+  document.getElementById('fds2').textContent=L.fds2;
+  document.getElementById('fds3').textContent=L.fds3;
+  document.getElementById('fdNextBtn').textContent=L.fdNextBtn;
+  document.getElementById('histTitle').textContent=L.histTitle;
+  document.getElementById('histClearBtn').textContent=L.histClearBtn;
+  const sel=document.getElementById('lcCountry');
+  const cur=sel.value;
+  sel.innerHTML=COUNTRY_VALS.map((v,i)=>`<option value="${v}">${L.countries[i]}</option>`).join('');
+  sel.value=cur||'OTHER';
+  renderLcList();renderLcSelectList();renderHist();
 }
 
-function applyLang() {
-  const L = T[LANG];
-  document.getElementById('appTitle').textContent = L.appTitle;
-  document.getElementById('langSwitchBtn').textContent = L.langSwitch;
-  document.getElementById('tab1Label').textContent = L.tab1;
-  document.getElementById('tab2Label').textContent = L.tab2;
-  document.getElementById('tab3Label').textContent = L.tab3;
-  document.getElementById('t1CardTitle').textContent = L.t1Card;
-  document.getElementById('contractLabel').textContent = L.contractLabel;
-  document.getElementById('lcContractNo').placeholder = L.contractPh;
-  document.getElementById('countryLabel').textContent = L.countryLabel;
-  document.getElementById('lcUpLabel').textContent = L.lcUpLabel;
-  document.getElementById('lcUpName').textContent = L.lcUpDefault;
-  document.getElementById('lcRegBtn').textContent = L.lcRegBtn;
-  document.getElementById('lcListTitle').textContent = L.lcListTitle;
-  document.getElementById('lcs1').textContent = L.lcs1;
-  document.getElementById('lcs2').textContent = L.lcs2;
-  document.getElementById('t2SelectTitle').textContent = L.t2Select;
-  document.getElementById('t2UpTitle').textContent = L.t2Up;
-  document.getElementById('invLabel').textContent = L.invLabel;
-  document.getElementById('fdInvNo').placeholder = L.invPh;
-  document.getElementById('fdUpLabel').textContent = L.fdUpLabel;
-  document.getElementById('fdUpName').textContent = L.fdUpDefault;
-  document.getElementById('fdGoBtn').textContent = L.fdGoBtn;
-  document.getElementById('fds1').textContent = L.fds1;
-  document.getElementById('fds2').textContent = L.fds2;
-  document.getElementById('fds3').textContent = L.fds3;
-  document.getElementById('fdNextBtn').textContent = L.fdNextBtn;
-  document.getElementById('histTitle').textContent = L.histTitle;
-  document.getElementById('histClearBtn').textContent = L.histClearBtn;
-  // Country select
-  const sel = document.getElementById('lcCountry');
-  const cur = sel.value;
-  sel.innerHTML = COUNTRY_VALS.map((v,i)=>`<option value="${v}">${L.countries[i]}</option>`).join('');
-  sel.value = cur || 'OTHER';
-  renderLcList();
-  renderLcSelectList();
-  renderHist();
-}
+document.getElementById('langSwitchBtnWrap').onclick=()=>{LANG=LANG==='ko'?'ja':'ko';applyLang();};
 
-function switchLang() {
-  LANG = LANG === 'ko' ? 'ja' : 'ko';
-  applyLang();
-}
-// lang switch button calls switchLang via backToLang replacement
-document.getElementById('langSwitchBtn') && (document.querySelector('.lang-switch button').onclick = switchLang);
-// fix: reassign after DOM ready
-setTimeout(()=>{
-  const btn = document.querySelector('.lang-switch button');
-  if(btn) btn.onclick = switchLang;
-},0);
-
-// ══ Tab ══
-function switchTab(t){
+function switchTab(tab){
   ['lc','fd','hist'].forEach((id,i)=>{
-    document.querySelectorAll('.tab')[i].classList.toggle('active',id===t);
-    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+    document.querySelectorAll('.tab')[i].classList.toggle('active',id===tab);
+    document.getElementById('tab-'+id).classList.toggle('active',id===tab);
   });
-  if(t==='fd') renderLcSelectList();
-  if(t==='hist') renderHist();
+  if(tab==='fd')renderLcSelectList();
+  if(tab==='hist')renderHist();
 }
 
-// ══ File helpers ══
 async function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
 function mtype(f){return f.type||(f.name.endsWith('.pdf')?'application/pdf':'image/jpeg');}
 async function fc(arr){
@@ -385,15 +359,9 @@ async function fc(arr){
   return out;
 }
 async function api(msgs,max=3000){
-  const key = API_KEY;
-  if(!key) throw new Error('API 키가 설정되지 않았습니다 / APIキーが未設定です');
+  if(!API_KEY)throw new Error('API 키가 설정되지 않았습니다 / APIキーが未設定です');
   const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':key,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
+    headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
     body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max,system:SYS,messages:msgs})});
   const d=await r.json();
   if(d.error)throw new Error(d.error.message);
@@ -407,20 +375,6 @@ function hfLc(inp){
   document.getElementById('lcUpBox').classList.toggle('has',fs.length>0);
   document.getElementById('lcUpName').textContent=fs.length?fs.map(f=>f.name).join(', '):t('lcUpDefault');
   document.getElementById('lcRegBtn').disabled=!fs.length;
-}
-
-async function loadSavedLCs(){
-  try{
-    const keys=await window.storage.list('lc:');
-    for(const key of keys.keys){
-      try{
-        const r=await window.storage.get(key);
-        if(r) DB.lcs[key]=JSON.parse(r.value);
-      }catch(e){}
-    }
-  }catch(e){}
-  renderLcList();
-  renderLcSelectList();
 }
 
 async function registerLC(){
@@ -439,12 +393,11 @@ async function registerLC(){
 LC番号と日付, 発行銀行(ISSUING BANK), 申請者(APPLICANT), 受益者(BENEFICIARY), 有効期限(EXPIRY DATE), 最終船積日(LATEST SHIPMENT DATE), 積地(POL), 揚地(POD), PARTIAL SHIPMENT, TRANSHIPMENT, TOLERANCE, 通貨・金額, BL CONSIGNEE(46Aより正確に), BL NOTIFY PARTY, FREIGHT条件, 保険条件, 45A商品説明(全文そのまま), 47A追加条件(全文そのまま), 46A必要書類リスト(各書類名と枚数)`}]}],3000);
     setS(['lcs1','lcs2'],2);
     document.getElementById('lcLmsg').textContent=t('lcSaving');
-    const id='lc:'+(contractNo||Date.now());
+    const id='lc_'+(contractNo||Date.now());
     const lcData={id,contractNo:contractNo||'(미입력/未入力)',country,rawText:raw,
       registeredAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),files:files.map(f=>f.name)};
-    // 영구 저장
-    await window.storage.set(id, JSON.stringify(lcData));
     DB.lcs[id]=lcData;
+    saveLCsToStorage();
     await new Promise(r=>setTimeout(r,300));
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcRegBtn').disabled=false;
@@ -452,7 +405,7 @@ LC番号と日付, 発行銀行(ISSUING BANK), 申請者(APPLICANT), 受益者(B
     document.getElementById('lcUpBox').classList.remove('has');
     document.getElementById('lcUpName').textContent=t('lcUpDefault');
     renderLcList();
-    alert(t('lcRegistered', contractNo||id));
+    alert(t('lcRegistered',contractNo||id));
   }catch(e){
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcRegBtn').disabled=false;
@@ -461,8 +414,7 @@ LC番号と日付, 発行銀行(ISSUING BANK), 申請者(APPLICANT), 受益者(B
 }
 
 function renderLcList(){
-  const el=document.getElementById('lcList');
-  if(!el)return;
+  const el=document.getElementById('lcList');if(!el)return;
   const items=Object.values(DB.lcs);
   if(!items.length){el.innerHTML=`<div class="empty">${t('lcEmpty')}</div>`;return;}
   el.innerHTML=items.map(lc=>`
@@ -481,18 +433,17 @@ function renderLcList(){
     </div>`).join('');
 }
 
-async function deleteLc(id,e){
+function deleteLc(id,e){
   e.stopPropagation();
   if(!confirm(t('lcDelConfirm')))return;
-  try{ await window.storage.delete(id); }catch(e){}
   delete DB.lcs[id];
+  saveLCsToStorage();
   if(selectedLcId===id)selectedLcId=null;
   renderLcList();
 }
 
 function renderLcSelectList(){
-  const el=document.getElementById('lcSelectList');
-  if(!el)return;
+  const el=document.getElementById('lcSelectList');if(!el)return;
   const items=Object.values(DB.lcs);
   if(!items.length){el.innerHTML=`<div class="empty">${t('t2SelectEmpty')}</div>`;updateFdBtn();return;}
   el.innerHTML=items.map(lc=>`
@@ -507,7 +458,6 @@ function renderLcSelectList(){
     </div>`).join('');
   updateFdBtn();
 }
-
 function selectLc(id){selectedLcId=id;renderLcSelectList();}
 
 // ══ FD 대조 ══
@@ -517,13 +467,10 @@ function hfFd(inp){
   document.getElementById('fdUpName').textContent=fdFiles.length?fdFiles.map(f=>f.name).join(', '):t('fdUpDefault');
   updateFdBtn();
 }
-function updateFdBtn(){
-  document.getElementById('fdGoBtn').disabled=!(selectedLcId&&fdFiles.length);
-}
+function updateFdBtn(){document.getElementById('fdGoBtn').disabled=!(selectedLcId&&fdFiles.length);}
 
 async function runFD(){
-  const lc=DB.lcs[selectedLcId];
-  if(!lc)return;
+  const lc=DB.lcs[selectedLcId];if(!lc)return;
   const invNo=document.getElementById('fdInvNo').value.trim();
   const cNote=lc.country==='THAILAND'?'【THAILAND】全書類にSHIPPING MARK必須。'
     :lc.country==='VIETNAM'?'【VIETNAM】BL NOTIFY PARTYはTAX ID#/IMPORT LICENC NO#/DEPOSIT NUMBER#/APPLICANT#/ADDRESS#/TEL#/FAX#/EMAIL形式必須。':'';
@@ -558,7 +505,7 @@ Invoice No: ${invNo||'未入力'} / 対象国: ${lc.country} ${cNote}
 12. 金額 → LC金額・TOLERANCEの範囲内か
 13. 数量・TOLERANCE → LC数量・TOLERANCE範囲内か
 14. PARTIAL条件 → LC PARTIAL条件と整合しているか
-15. LC 46A個別条件 → 46Aに記載された全ての個別条件を1つずつ確認すること。例えば「B/L MUST SHOW NAME, ADDRESS, TEL NO, FAX NO OF SHIPPING AGENT」のような条件は、NAME/ADDRESS/TEL NO/FAX NOの各項目が全て実際にBLに記載されているかを個別に確認し、1つでも欠けていればNG。条件文に含まれる全要素を必ず個別チェックすること。`}]}],3000);
+15. LC 46A個別条件 → 46Aに記載された全ての個別条件を1つずつ確認すること。「B/L MUST SHOW NAME, ADDRESS, TEL NO, FAX NO OF SHIPPING AGENT」のような条件はNAME/ADDRESS/TEL NO/FAX NOの各項目が全てBLに記載されているかを個別確認し、1つでも欠けていればNG。`}]}],3000);
 
     setS(['fds1','fds2','fds3'],2);
     document.getElementById('fdLmsg').textContent=t('fdStep2');
@@ -588,23 +535,12 @@ OVERALL: OK または NG または WARN`}]}],3000);
     setS(['fds1','fds2','fds3'],3);
     document.getElementById('fdLmsg').textContent=t('fdStep3');
     await new Promise(r=>setTimeout(r,300));
-    // 디버그: raw 응답 확인
-    console.log('=== STEP1 RAW ===', r1);
-    console.log('=== STEP2 RAW ===', r2);
-    const combined = r1+'\n'+r2;
-    const checkLines = combined.split('\n').filter(l=>/^\[(OK|NG|WARN)\]/.test(l.trim()));
-    console.log('=== PARSED CHECK LINES ===', checkLines);
-    if(checkLines.length===0){
-      // raw 응답을 화면에 표시
-      document.getElementById('fdProg').style.display='none';
-      document.getElementById('fdResult').style.display='block';
-      document.getElementById('fdRc').innerHTML=`<div class="sbox" style="font-size:.7rem">⚠️ 파싱 실패 - RAW 응답:\n\n${combined.substring(0,3000)}</div>`;
-      document.getElementById('fdGoBtn').disabled=false;
-      return;
-    }
-    const result=parseAndRender(combined, invNo, lc);
+    const combined=r1+'\n'+r2;
+    const cleaned=combined.replace(/\*\*\[(OK|NG|WARN)\]\*\*/g,'[$1]').replace(/\*\*/g,'');
+    const result=parseAndRender(cleaned,invNo,lc);
     DB.history.unshift({contractNo:lc.contractNo,invNo:invNo||'-',country:lc.country,
-      overall:result.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),html:document.getElementById('fdRc').innerHTML});
+      overall:result.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),
+      html:document.getElementById('fdRc').innerHTML});
     document.getElementById('fdProg').style.display='none';
     document.getElementById('fdResult').style.display='block';
     document.getElementById('fdGoBtn').disabled=false;
@@ -616,7 +552,7 @@ OVERALL: OK または NG または WARN`}]}],3000);
   }
 }
 
-function parseAndRender(raw, invNo, lc){
+function parseAndRender(raw,invNo,lc){
   const checkLines=raw.split('\n').filter(l=>/^\[(OK|NG|WARN)\]/.test(l.trim()));
   const docLines=raw.split('\n').filter(l=>l.trim().startsWith('DOCS:'));
   const tobankM=raw.match(/TOBANK:\s*(.+?)(?=\nSUMMARY:|$)/s);
@@ -684,10 +620,8 @@ function clearFDResult(){
   updateFdBtn();
 }
 
-// ══ 이력 ══
 function renderHist(){
-  const el=document.getElementById('histList');
-  if(!el)return;
+  const el=document.getElementById('histList');if(!el)return;
   if(!DB.history.length){el.innerHTML=`<div class="empty">${t('histEmpty')}</div>`;return;}
   el.innerHTML=DB.history.map((h,i)=>{
     const vc=h.overall==='OK'?'var(--ok)':h.overall==='NG'?'var(--ng)':'var(--warn)';
