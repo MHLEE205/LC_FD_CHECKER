@@ -111,17 +111,19 @@ td{padding:4px 5px;border-bottom:1px solid var(--border);}
 <div id="app">
   <div class="lang-switch"><button onclick="backToLang()">🌐 <span id="langSwitchBtn"></span></button></div>
   <h1>🔍 LC / FD <span id="appTitle"></span></h1>
-  <p class="sub">LEENEAR CORPORATION — v5</p>
+  <p class="sub">LEENEAR CORPORATION — v5 (API Key 対応)</p>
 
   <!-- API 키 입력 -->
   <div class="card" id="apiKeyCard">
-    <div class="ct" id="apiKeyTitle">🔑 Anthropic API Key</div>
+    <div class="ct">🔑 Anthropic API Key</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1;font-family:monospace">
-      <button onclick="saveApiKey()" style="white-space:nowrap;padding:6px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:.78rem;font-weight:700;cursor:pointer">저장</button>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1;font-family:monospace;font-size:.75rem">
+      <button onclick="saveApiKey()" style="white-space:nowrap;padding:7px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:.78rem;font-weight:700;cursor:pointer">저장 / 保存</button>
     </div>
-    <div id="apiKeyStatus" style="font-size:.7rem;margin-top:6px;color:var(--sub)">API 키를 입력해 주세요</div>
+    <div id="apiKeyStatus" style="font-size:.7rem;margin-top:6px;color:var(--sub)">API 키를 입력해 주세요 / APIキーを入力してください</div>
   </div>
+
+
 
   <div class="tabs">
     <div class="tab active" id="tab1Label" onclick="switchTab('lc')"></div>
@@ -279,15 +281,16 @@ let API_KEY = '';
 function saveApiKey(){
   const val = document.getElementById('apiKeyInput').value.trim();
   if(!val.startsWith('sk-ant-')){
-    document.getElementById('apiKeyStatus').textContent = '❌ 올바른 API 키 형식이 아닙니다 (sk-ant-... 로 시작해야 함)';
+    document.getElementById('apiKeyStatus').textContent = '❌ 형식 오류 / 形式エラー (sk-ant-... で始まること)';
     document.getElementById('apiKeyStatus').style.color = 'var(--ng)';
     return;
   }
   API_KEY = val;
-  document.getElementById('apiKeyStatus').textContent = '✅ API 키가 설정되었습니다';
+  document.getElementById('apiKeyStatus').textContent = '✅ API 키 설정 완료 / APIキー設定済み';
   document.getElementById('apiKeyStatus').style.color = 'var(--ok)';
-  document.getElementById('apiKeyInput').value = '••••••••••••••••••••';
+  document.getElementById('apiKeyInput').value = '••••••••••••••••••••••••';
 }
+
 
 const SYS = `あなたはLEENEAR CORPORATIONの貿易書類専門家です。
 LEENEAR社内規則：LC番号記載形式「LC番号 DATED ON 日付」/ INVOICE・PL必須「COUNTRY OF ORIGIN : JAPAN」/ ADVISING BANK：SUMITOMO MITSUI BANKING CORPORATION / 1コンテナ1アイテム / TOLERANCE通常10% / FD（社内用）とTO_BANK（銀行提出）を区別`;
@@ -302,7 +305,7 @@ function initApp(lang) {
   document.getElementById('langScreen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   applyLang();
-  renderLcList();
+  loadSavedLCs(); // 저장된 LC 불러오기
 }
 
 function backToLang() {
@@ -382,9 +385,15 @@ async function fc(arr){
   return out;
 }
 async function api(msgs,max=3000){
-  if(!API_KEY){ throw new Error('API 키가 설정되지 않았습니다. 상단 입력란에 API 키를 먼저 입력해 주세요.'); }
+  const key = API_KEY;
+  if(!key) throw new Error('API 키가 설정되지 않았습니다 / APIキーが未設定です');
   const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01'},
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
     body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max,system:SYS,messages:msgs})});
   const d=await r.json();
   if(d.error)throw new Error(d.error.message);
@@ -398,6 +407,20 @@ function hfLc(inp){
   document.getElementById('lcUpBox').classList.toggle('has',fs.length>0);
   document.getElementById('lcUpName').textContent=fs.length?fs.map(f=>f.name).join(', '):t('lcUpDefault');
   document.getElementById('lcRegBtn').disabled=!fs.length;
+}
+
+async function loadSavedLCs(){
+  try{
+    const keys=await window.storage.list('lc:');
+    for(const key of keys.keys){
+      try{
+        const r=await window.storage.get(key);
+        if(r) DB.lcs[key]=JSON.parse(r.value);
+      }catch(e){}
+    }
+  }catch(e){}
+  renderLcList();
+  renderLcSelectList();
 }
 
 async function registerLC(){
@@ -416,9 +439,12 @@ async function registerLC(){
 LC番号と日付, 発行銀行(ISSUING BANK), 申請者(APPLICANT), 受益者(BENEFICIARY), 有効期限(EXPIRY DATE), 最終船積日(LATEST SHIPMENT DATE), 積地(POL), 揚地(POD), PARTIAL SHIPMENT, TRANSHIPMENT, TOLERANCE, 通貨・金額, BL CONSIGNEE(46Aより正確に), BL NOTIFY PARTY, FREIGHT条件, 保険条件, 45A商品説明(全文そのまま), 47A追加条件(全文そのまま), 46A必要書類リスト(各書類名と枚数)`}]}],3000);
     setS(['lcs1','lcs2'],2);
     document.getElementById('lcLmsg').textContent=t('lcSaving');
-    const id='lc_'+(contractNo||Date.now());
-    DB.lcs[id]={id,contractNo:contractNo||'(미입력/未入力)',country,rawText:raw,
+    const id='lc:'+(contractNo||Date.now());
+    const lcData={id,contractNo:contractNo||'(미입력/未入力)',country,rawText:raw,
       registeredAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),files:files.map(f=>f.name)};
+    // 영구 저장
+    await window.storage.set(id, JSON.stringify(lcData));
+    DB.lcs[id]=lcData;
     await new Promise(r=>setTimeout(r,300));
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcRegBtn').disabled=false;
@@ -455,9 +481,10 @@ function renderLcList(){
     </div>`).join('');
 }
 
-function deleteLc(id,e){
+async function deleteLc(id,e){
   e.stopPropagation();
   if(!confirm(t('lcDelConfirm')))return;
+  try{ await window.storage.delete(id); }catch(e){}
   delete DB.lcs[id];
   if(selectedLcId===id)selectedLcId=null;
   renderLcList();
@@ -512,28 +539,70 @@ async function runFD(){
 `FD書類（BL・INVOICE）を以下のLC条件と照合してください。
 --- LC条件 ---\n${lcInfo}\n--- 照合情報 ---
 Invoice No: ${invNo||'未入力'} / 対象国: ${lc.country} ${cNote}
-各チェック項目を以下の形式で出力。JSON不要。
-形式: [OK/NG/WARN] カテゴリ名 > 項目名 | 説明
-チェック対象: LC番号記載, 有効期限, BL CONSIGNEE, BL NOTIFY PARTY, FREIGHT条件, ON BOARD表記, POL, POD, 最終船積日, INVOICE 45A商品説明一致, COUNTRY OF ORIGIN JAPAN, 金額, 数量・TOLERANCE, PARTIAL条件`}]}],3000);
+
+【重要】マークダウン・見出し・箇条書き・太字（**）は一切使用禁止。以下の形式のみで出力すること。
+形式: [OK/NG/WARN] カテゴリ名 > 項目名 | LC条件と照合結果の詳細説明
+
+チェック対象（全項目必須）:
+1. LC番号記載 → 全書類に「LC番号 DATED ON 日付」形式で記載されているか
+2. 有効期限 → 船積日・書類提出期限がLC有効期限内か
+3. BL CONSIGNEE → LC 46Aの指定通りか（一字一句確認）
+4. BL NOTIFY PARTY → LC指定通りか（一字一句確認）
+5. FREIGHT条件 → PREPAID/COLLECTがLC条件と一致するか（LC 46Aの正確な表現と比較）
+6. ON BOARD表記 → BLにON BOARD DATE記載があるか
+7. POL → LC指定の積地と一致するか
+8. POD → LC指定の揚地と一致するか
+9. 最終船積日 → LATEST SHIPMENT DATE以内か
+10. INVOICE 45A商品説明 → LC 45Aの全文と完全一致するか
+11. COUNTRY OF ORIGIN → INVOICE・PLに「COUNTRY OF ORIGIN : JAPAN」記載があるか
+12. 金額 → LC金額・TOLERANCEの範囲内か
+13. 数量・TOLERANCE → LC数量・TOLERANCE範囲内か
+14. PARTIAL条件 → LC PARTIAL条件と整合しているか
+15. LC 46A個別条件 → 46Aに記載された全ての個別条件を1つずつ確認すること。例えば「B/L MUST SHOW NAME, ADDRESS, TEL NO, FAX NO OF SHIPPING AGENT」のような条件は、NAME/ADDRESS/TEL NO/FAX NOの各項目が全て実際にBLに記載されているかを個別に確認し、1つでも欠けていればNG。条件文に含まれる全要素を必ず個別チェックすること。`}]}],3000);
 
     setS(['fds1','fds2','fds3'],2);
     document.getElementById('fdLmsg').textContent=t('fdStep2');
     const r2=await api([{role:'user',content:[...fdC,{type:'text',text:
 `FD書類（PACKING LIST・保険・その他）を以下のLC条件と照合してください。
 --- LC条件 ---\n${lcInfo}\n対象国: ${lc.country} ${cNote}
-チェック結果:
-形式: [OK/NG/WARN] カテゴリ名 > 項目名 | 説明
-必要書類枚数:
+
+【重要】マークダウン・見出し・箇条書き・太字（**）は一切使用禁止。以下の形式のみで出力すること。
+形式: [OK/NG/WARN] カテゴリ名 > 項目名 | LC条件と照合結果の詳細説明
+
+チェック対象（全項目必須）:
+1. PACKING LIST記載内容 → 品名・数量・重量・梱包がINVOICEと一致するか
+2. PACKING LIST COUNTRY OF ORIGIN → 「COUNTRY OF ORIGIN : JAPAN」記載があるか
+3. 保険条件 → LC指定の保険条件・カバー率・保険会社等と一致するか
+4. 47A追加条件 → 47Aの全追加条件が各書類に反映されているか（項目ごとに個別確認）
+5. 国別特殊条件 → ${cNote||'該当なし'}
+6. その他注意事項 → 上記以外で気になる点
+
+必要書類枚数（46Aの全書類を必ずリスト化）:
 形式: DOCS: 書類名 | LC指定枚数 | FD準備枚数 | OK/NG/WARN
+
 必ず最後に出力:
-TOBANK: （DRAFTへの必須記載事項。47A ALL DOCUMENTがあれば具体的に）
-SUMMARY: （総合所見。修正必須事項を優先）
+TOBANK: （DRAFTへの必須記載事項。47A ALL DOCUMENTがあれば具体的に全て列挙）
+SUMMARY: （종합판정이 OK/NG/WARN인 구체적 근거를 먼저 쓰고, 수정필요사항, 주의사항 순으로）
 OVERALL: OK または NG または WARN`}]}],3000);
 
     setS(['fds1','fds2','fds3'],3);
     document.getElementById('fdLmsg').textContent=t('fdStep3');
     await new Promise(r=>setTimeout(r,300));
-    const result=parseAndRender(r1+'\n'+r2, invNo, lc);
+    // 디버그: raw 응답 확인
+    console.log('=== STEP1 RAW ===', r1);
+    console.log('=== STEP2 RAW ===', r2);
+    const combined = r1+'\n'+r2;
+    const checkLines = combined.split('\n').filter(l=>/^\[(OK|NG|WARN)\]/.test(l.trim()));
+    console.log('=== PARSED CHECK LINES ===', checkLines);
+    if(checkLines.length===0){
+      // raw 응답을 화면에 표시
+      document.getElementById('fdProg').style.display='none';
+      document.getElementById('fdResult').style.display='block';
+      document.getElementById('fdRc').innerHTML=`<div class="sbox" style="font-size:.7rem">⚠️ 파싱 실패 - RAW 응답:\n\n${combined.substring(0,3000)}</div>`;
+      document.getElementById('fdGoBtn').disabled=false;
+      return;
+    }
+    const result=parseAndRender(combined, invNo, lc);
     DB.history.unshift({contractNo:lc.contractNo,invNo:invNo||'-',country:lc.country,
       overall:result.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),html:document.getElementById('fdRc').innerHTML});
     document.getElementById('fdProg').style.display='none';
