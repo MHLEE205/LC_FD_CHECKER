@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LC/FD/SI 체크 v6.3 — LEENEAR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;
+  --accent:#4f7cff;--accent2:#7c4fff;--ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;
+  --text:#e8eaf0;--sub:#8b90a8;--r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;padding:16px 14px 80px;}
+
+/* ── 언어 선택 화면 ── */
+#langScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;gap:24px;}
+.lang-title{font-size:1.1rem;font-weight:700;color:var(--sub);text-align:center;line-height:1.6;}
+.lang-btns{display:flex;gap:16px;}
+.lang-btn{padding:18px 36px;border:2px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all .2s;text-align:center;}
+.lang-btn:hover{border-color:var(--accent);background:rgba(79,124,255,.1);}
+.lang-btn span{display:block;font-size:.72rem;color:var(--sub);margin-top:4px;font-weight:400;}
+
+/* ── 메인 앱 ── */
+#app{display:none;}
+.top-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
+h1{font-size:1.15rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.ver{font-size:.7rem;color:var(--sub);margin-bottom:14px;}
+.lang-sw{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--sub);padding:4px 10px;font-size:.7rem;cursor:pointer;}
+.lang-sw:hover{border-color:var(--accent);color:var(--text);}
+
+/* ── API 키 섹션 ── */
+#apiSection{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;}
+.api-title{font-size:.72rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+.api-row{display:flex;gap:8px;align-items:center;}
+.api-row label{font-size:.75rem;color:var(--sub);white-space:nowrap;flex-shrink:0;}
+#apiKeyInput{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:.74rem;font-family:monospace;outline:none;min-width:0;}
+#apiKeyInput:focus{border-color:var(--accent);}
+#apiKeyInput::placeholder{color:#3a3f5a;font-family:'Segoe UI',sans-serif;}
+.api-save-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:8px;color:#fff;padding:7px 14px;font-size:.73rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.api-save-btn:hover{opacity:.85;}
+.api-clear-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--sub);padding:7px 10px;font-size:.73rem;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.api-clear-btn:hover{border-color:var(--ng);color:#fca5a5;}
+#apiStatus{font-size:.7rem;margin-top:7px;padding:5px 10px;border-radius:6px;display:none;}
+#apiStatus.ok{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#86efac;display:block;}
+#apiStatus.ng{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5;display:block;}
+#apiStatus.info{background:rgba(79,124,255,.1);border:1px solid rgba(79,124,255,.25);color:#93c5fd;display:block;}
+
+/* ── 탭 ── */
+.tabs{display:flex;gap:4px;margin-bottom:14px;}
+.tab{flex:1;padding:9px 4px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--sub);font-size:.74rem;font-weight:600;cursor:pointer;text-align:center;transition:all .2s;}
+.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;}
+.tab:not(.active):hover{border-color:var(--accent);color:var(--text);}
+.panel{display:none;}.panel.active{display:block;}
+
+/* ── 공통 카드 ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:12px;}
+.ct{font-size:.72rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+.ubox{border:2px dashed var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;position:relative;transition:all .2s;margin-bottom:8px;}
+.ubox:hover{border-color:var(--accent);background:rgba(79,124,255,.04);}
+.ubox.has{border-color:var(--ok);border-style:solid;background:rgba(34,197,94,.04);}
+.ubox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.ui{font-size:1.4rem;margin-bottom:4px;pointer-events:none;}
+.ul{font-size:.7rem;font-weight:600;color:var(--sub);pointer-events:none;}
+.un{font-size:.65rem;color:var(--ok);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;}
+.crow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.crow label{font-size:.75rem;color:var(--sub);white-space:nowrap;}
+select,input[type=text]{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 9px;font-size:.77rem;outline:none;}
+select:focus,input[type=text]:focus{border-color:var(--accent);}
+
+/* ── 버튼 ── */
+.btn{width:100%;padding:11px;border:none;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-p{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.btn-p:hover{opacity:.88;transform:translateY(-1px);}
+.btn-p:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.btn-s{background:var(--surface2);color:var(--sub);font-size:.75rem;padding:8px;border:1px solid var(--border);}
+.btn-s:hover{border-color:var(--accent);color:var(--text);}
+
+/* ── LC 목록 ── */
+.lc-item{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:all .2s;}
+.lc-item:hover{border-color:var(--accent);}
+.lc-item.selected{border-color:var(--ok);background:rgba(34,197,94,.07);}
+.lc-head{display:flex;justify-content:space-between;align-items:center;}
+.lc-title{font-size:.8rem;font-weight:700;}
+.lc-meta{font-size:.67rem;color:var(--sub);margin-top:3px;}
+.lc-badge{font-size:.63rem;padding:2px 8px;border-radius:10px;background:rgba(34,197,94,.15);color:var(--ok);}
+.del-btn{background:rgba(239,68,68,.12);color:var(--ng);border:none;border-radius:6px;padding:3px 8px;font-size:.67rem;cursor:pointer;}
+.del-btn:hover{background:rgba(239,68,68,.28);}
+.empty{text-align:center;color:var(--sub);font-size:.77rem;padding:20px;border:1px dashed var(--border);border-radius:9px;}
+
+/* ── 진행 표시 ── */
+.steps{display:flex;gap:4px;margin-bottom:8px;}
+.step{flex:1;padding:5px;border-radius:6px;text-align:center;font-size:.66rem;font-weight:600;border:1px solid var(--border);color:var(--sub);background:var(--surface2);}
+.step.active{border-color:var(--accent);color:var(--accent);background:rgba(79,124,255,.1);}
+.step.done{border-color:var(--ok);color:var(--ok);background:rgba(34,197,94,.08);}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.lmsg{font-size:.77rem;color:var(--sub);padding:6px 0;}
+
+/* ── 결과 ── */
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.verdict{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.v-text{font-size:.95rem;font-weight:800;}
+.v-sub{font-size:.68rem;color:var(--sub);}
+.srow{display:flex;gap:7px;margin-bottom:10px;}
+.sc{flex:1;background:var(--surface2);border-radius:8px;padding:8px;text-align:center;border:1px solid var(--border);}
+.sn{font-size:1.15rem;font-weight:800;}
+.sn.ok{color:var(--ok);}.sn.ng{color:var(--ng);}.sn.warn{color:var(--warn);}
+.sl{font-size:.62rem;color:var(--sub);margin-top:1px;}
+.sh{display:flex;align-items:center;gap:7px;margin:12px 0 5px;}
+.st{font-size:.77rem;font-weight:700;}
+.badge{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:10px;}
+.b-ok{background:rgba(34,197,94,.15);color:var(--ok);}
+.b-ng{background:rgba(239,68,68,.15);color:var(--ng);}
+.b-w{background:rgba(245,158,11,.15);color:var(--warn);}
+.ci{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:7px;margin-bottom:3px;background:var(--surface2);border-left:3px solid transparent;}
+.ci.ok{border-left-color:var(--ok);}.ci.ng{border-left-color:var(--ng);}.ci.warn{border-left-color:var(--warn);}
+.ctit{font-size:.75rem;font-weight:600;margin-bottom:1px;}
+.ci.ok .ctit{color:#86efac;}.ci.ng .ctit{color:#fca5a5;}.ci.warn .ctit{color:#fcd34d;}
+.cdesc{font-size:.69rem;color:var(--sub);line-height:1.5;}
+.sbox{background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:4px;border:1px solid var(--border);font-size:.75rem;line-height:1.7;white-space:pre-wrap;}
+.err{background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.28);border-radius:9px;padding:10px 12px;font-size:.75rem;color:#fca5a5;white-space:pre-wrap;}
+table{width:100%;border-collapse:collapse;font-size:.71rem;}
+th{text-align:left;padding:4px 5px;color:var(--sub);border-bottom:1px solid var(--border);}
+td{padding:4px 5px;border-bottom:1px solid var(--border);}
+
+/* ── SI ── */
+.si-info{background:rgba(79,124,255,.07);border:1px solid rgba(79,124,255,.2);border-radius:8px;padding:7px 11px;margin-bottom:9px;font-size:.74rem;}
+.si-info strong{color:var(--accent);}
+
+/* ── 이력 ── */
+.hist-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:all .2s;}
+.hist-item:hover{border-color:var(--accent);}
+.hist-head{display:flex;justify-content:space-between;align-items:center;}
+.hist-title{font-size:.77rem;font-weight:600;}
+.hist-meta{font-size:.65rem;color:var(--sub);margin-top:2px;}
+.badge-fd{font-size:.63rem;padding:2px 7px;border-radius:10px;background:rgba(34,197,94,.15);color:var(--ok);margin-right:4px;}
+.badge-si{font-size:.63rem;padding:2px 7px;border-radius:10px;background:rgba(79,124,255,.15);color:var(--accent);margin-right:4px;}
+</style>
+</head>
+<body>
+
+<!-- 언어 선택 -->
+<div id="langScreen">
+  <div class="lang-title">🔍 LC / FD / SI 체크 Tool<br><span style="font-size:.85rem;font-weight:400;color:var(--sub)">LEENEAR CORPORATION</span></div>
+  <div class="lang-btns">
+    <div class="lang-btn" onclick="initApp('ko')">🇰🇷 한국어<span>Korean</span></div>
+    <div class="lang-btn" onclick="initApp('ja')">🇯🇵 日本語<span>Japanese</span></div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="app">
+  <div class="top-bar">
+    <div>
+      <h1>🔍 LC / FD / SI <span id="appTitle"></span></h1>
+      <div class="ver">LEENEAR CORPORATION — v6.3</div>
+    </div>
+    <button class="lang-sw" onclick="switchLang()" id="langSwBtn"></button>
+  </div>
+
+  <!-- ★ API Key 섹션 ★ -->
+  <div id="apiSection">
+    <div class="api-title" id="apiTitle">🔑 Anthropic API Key</div>
+    <div class="api-row">
+      <label id="apiLabel"></label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      <button class="api-save-btn" id="apiSaveBtn" onclick="saveApiKey()"></button>
+      <button class="api-clear-btn" id="apiClearBtn" onclick="clearApiKey()"></button>
+    </div>
+    <div id="apiStatus"></div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tabs">
+    <div class="tab active" id="tab1" onclick="switchTab('lc')"></div>
+    <div class="tab" id="tab2" onclick="switchTab('fd')"></div>
+    <div class="tab" id="tab3" onclick="switchTab('si')"></div>
+    <div class="tab" id="tab4" onclick="switchTab('hist')"></div>
+  </div>
+
+  <!-- ① LC 등록 -->
+  <div class="panel active" id="tab-lc">
+    <div class="card">
+      <div class="ct" id="lcUpCardTitle"></div>
+      <div class="crow">
+        <label id="contractLabel"></label>
+        <input type="text" id="lcContractNo" style="width:150px">
+        <label id="countryLabel" style="margin-left:6px"></label>
+        <select id="lcCountry"></select>
+      </div>
+      <div class="ubox" id="lcBox">
+        <input type="file" id="lcFile" accept=".pdf,image/*" multiple onchange="onLcFile(this)">
+        <div class="ui">📄</div>
+        <div class="ul" id="lcBoxLabel"></div>
+        <div class="un" id="lcBoxName"></div>
+      </div>
+      <button class="btn btn-p" id="lcRegBtn" onclick="registerLC()" disabled></button>
+    </div>
+    <div class="card">
+      <div class="ct" id="lcListTitle"></div>
+      <div id="lcList"></div>
+    </div>
+    <div id="lcProg" style="display:none;margin-top:4px">
+      <div class="steps"><div class="step" id="lcs1"></div><div class="step" id="lcs2"></div></div>
+      <div class="lmsg"><span class="spinner"></span><span id="lcProgMsg"></span></div>
+    </div>
+  </div>
+
+  <!-- ② FD 대조 -->
+  <div class="panel" id="tab-fd">
+    <div class="card">
+      <div class="ct" id="fdSelectTitle"></div>
+      <div id="fdLcList"></div>
+    </div>
+    <div class="card">
+      <div class="ct" id="fdUpTitle"></div>
+      <div class="crow">
+        <label id="invLabel"></label>
+        <input type="text" id="fdInvNo" style="width:180px">
+      </div>
+      <div class="ubox" id="fdBox">
+        <input type="file" id="fdFile" accept=".pdf,image/*" multiple onchange="onFdFile(this)">
+        <div class="ui">📋</div>
+        <div class="ul" id="fdBoxLabel"></div>
+        <div class="un" id="fdBoxName"></div>
+      </div>
+      <button class="btn btn-p" id="fdGoBtn" onclick="runFD()" disabled></button>
+    </div>
+    <div id="fdProg" style="display:none;margin-top:4px">
+      <div class="steps"><div class="step" id="fds1"></div><div class="step" id="fds2"></div><div class="step" id="fds3"></div></div>
+      <div class="lmsg"><span class="spinner"></span><span id="fdProgMsg"></span></div>
+    </div>
+    <div id="fdResult" style="display:none">
+      <div class="divider"></div>
+      <div id="fdRc"></div>
+      <button class="btn btn-s" id="fdNextBtn" style="margin-top:8px" onclick="clearFd()"></button>
+    </div>
+  </div>
+
+  <!-- ③ SI 체크 -->
+  <div class="panel" id="tab-si">
+    <div class="card">
+      <div class="ct" id="siSelectTitle"></div>
+      <div id="siLcList"></div>
+    </div>
+    <div class="card">
+      <div class="ct" id="siUpTitle"></div>
+      <div class="ubox" id="siBox">
+        <input type="file" id="siFile" accept=".csv,.xlsx,.xls" onchange="onSiFile(this)">
+        <div class="ui">📊</div>
+        <div class="ul" id="siBoxLabel"></div>
+        <div class="un" id="siBoxName"></div>
+      </div>
+      <div id="siInfo" style="display:none" class="si-info"></div>
+      <button class="btn btn-p" id="siGoBtn" onclick="runSI()" disabled></button>
+    </div>
+    <div id="siProg" style="display:none;margin-top:4px">
+      <div class="steps"><div class="step" id="sis1"></div><div class="step" id="sis2"></div><div class="step" id="sis3"></div></div>
+      <div class="lmsg"><span class="spinner"></span><span id="siProgMsg"></span></div>
+    </div>
+    <div id="siResult" style="display:none">
+      <div class="divider"></div>
+      <div id="siRc"></div>
+      <button class="btn btn-s" id="siNextBtn" style="margin-top:8px" onclick="clearSi()"></button>
+    </div>
+  </div>
+
+  <!-- ④ 이력 -->
+  <div class="panel" id="tab-hist">
+    <div class="card">
+      <div class="ct" id="histTitle"></div>
+      <div id="histList"></div>
+    </div>
+    <button class="btn btn-s" id="histClearBtn" style="margin-top:4px" onclick="clearHist()"></button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  다국어 텍스트
+// ═══════════════════════════════════════════
+const TX = {
+  ko:{
+    appTitle:'비교 체크 Tool', langSw:'日本語로 전환',
+    apiLabel:'API Key:', apiSave:'저장', apiClear:'삭제',
+    apiSaved:k=>`✅ API Key 등록 완료 (${k.slice(0,16)}...)`,
+    apiCleared:'🗑 API Key를 삭제했습니다',
+    apiNone:'⚠️ API Key를 입력해주세요',
+    apiBadFmt:'⚠️ 형식 오류 — sk-ant- 로 시작해야 합니다',
+    apiRegistered:k=>`✅ API Key 등록됨 (${k.slice(0,16)}...)`,
+    apiNotRegistered:'⚠️ API Key 미등록 — 입력 후 저장해주세요',
+    tab1:'① LC 등록', tab2:'② FD 대조', tab3:'③ SI 체크', tab4:'④ 이력',
+    lcUpCard:'📄 LC 파일 업로드 & 등록', contractLabel:'계약번호:',
+    contractPh:'예) LN-2026-001', countryLabel:'수입국:',
+    lcBoxLabel:'LC 파일 (PDF / 이미지)', lcBoxDefault:'클릭하여 선택',
+    lcRegBtn:'📥 LC 분석 & 등록', lcListTitle:'💾 등록된 LC 목록',
+    lcEmpty:'등록된 LC가 없습니다', lcBadge:'등록완료', delBtn:'삭제',
+    lcs1:'① LC 읽기', lcs2:'② 저장',
+    lcAnalyzing:'LC 분석 중...', lcSaving:'저장 중...',
+    lcDone:c=>`✅ "${c}" LC 등록 완료!`,
+    lcDelConfirm:'이 LC를 삭제하시겠습니까?',
+    fdSelectTitle:'🗂 사용할 LC 선택',
+    fdSelectEmpty:'먼저 ① LC 등록 탭에서 LC를 등록하세요',
+    selectedBadge:'선택됨 ✓',
+    fdUpTitle:'📋 FD 파일 업로드',
+    invLabel:'Invoice No.:',invPh:'예) LN-2026-001-01',
+    fdBoxLabel:'FD 파일 (복수 선택 가능)', fdBoxDefault:'클릭하여 선택',
+    fdGoBtn:'🔍 FD 대조 시작',
+    fds1:'① BL/IV 대조', fds2:'② PL/기타 대조', fds3:'③ 결과 정리',
+    fdStep1:'BL / Invoice 대조 중...', fdStep2:'PL / 보험 / 추가조건 대조 중...', fdStep3:'결과 정리 중...',
+    fdNextBtn:'🔄 다음 FD 대조',
+    verdict:v=>v==='OK'?'종합판정: OK ✅':v==='NG'?'종합판정: NG ❌':'종합판정: 요확인 ⚠️',
+    sOK:'✅ OK', sNG:'❌ NG', sWarn:'⚠️ 요확인',
+    docsTitle:'📑 필요서류 (46A) 매수확인',
+    dName:'서류명',dLc:'LC지정',dFd:'FD준비',dSt:'판정',
+    tobankTitle:'🏦 TO_BANK 특기사항',
+    sumTitle:'📝 총합소견',
+    siSelectTitle:'🗂 대조할 LC 선택',
+    siSelectEmpty:'먼저 ① LC 등록 탭에서 LC를 등록하세요',
+    siUpTitle:'📊 SI 데이터 업로드 (CSV / Excel)',
+    siBoxLabel:'COMPASS에서 내보낸 SI 파일', siBoxDefault:'클릭하여 선택',
+    siGoBtn:'🔍 SI 체크 시작',
+    sis1:'① SI 읽기', sis2:'② LC 대조', sis3:'③ 결과 정리',
+    siStep1:'SI 데이터 읽는 중...', siStep2:'LC 조건과 대조 중...', siStep3:'결과 정리 중...',
+    siNextBtn:'🔄 다음 SI 체크',
+    siVerdict:v=>v==='OK'?'SI 체크: OK ✅':v==='NG'?'SI 체크: NG ❌':'SI 체크: 요확인 ⚠️',
+    siSumTitle:'📝 SI 소견 & 수정사항',
+    histTitle:'📚 체크 이력', histEmpty:'체크 이력이 없습니다',
+    histClear:'🗑 이력 전체 삭제', histClearConfirm:'이력을 모두 삭제하시겠습니까?',
+    errPfx:'⚠️ 에러: ',
+    countries:['기타','태국','베트남','인도네시아','필리핀','말레이시아'],
+  },
+  ja:{
+    appTitle:'照合チェックTool', langSw:'한국어로 전환',
+    apiLabel:'API Key:', apiSave:'保存', apiClear:'削除',
+    apiSaved:k=>`✅ API Key登録済み (${k.slice(0,16)}...)`,
+    apiCleared:'🗑 API Keyを削除しました',
+    apiNone:'⚠️ API Keyを入力してください',
+    apiBadFmt:'⚠️ 形式エラー — sk-ant- で始まる必要があります',
+    apiRegistered:k=>`✅ API Key登録済み (${k.slice(0,16)}...)`,
+    apiNotRegistered:'⚠️ API Key未登録 — 入力して保存してください',
+    tab1:'① LC登録', tab2:'② FD照合', tab3:'③ SI確認', tab4:'④ 履歴',
+    lcUpCard:'📄 LCファイルアップロード＆登録', contractLabel:'契約番号:',
+    contractPh:'例) LN-2026-001', countryLabel:'輸入国:',
+    lcBoxLabel:'LCファイル (PDF / 画像)', lcBoxDefault:'クリックして選択',
+    lcRegBtn:'📥 LC分析＆登録', lcListTitle:'💾 登録済みLCリスト',
+    lcEmpty:'登録されたLCはありません', lcBadge:'登録済', delBtn:'削除',
+    lcs1:'① LC読込', lcs2:'② 保存',
+    lcAnalyzing:'LC分析中...', lcSaving:'保存中...',
+    lcDone:c=>`✅「${c}」LC登録完了!`,
+    lcDelConfirm:'このLCを削除しますか？',
+    fdSelectTitle:'🗂 使用するLCを選択',
+    fdSelectEmpty:'先に① LC登録タブでLCを登録してください',
+    selectedBadge:'選択中 ✓',
+    fdUpTitle:'📋 FDファイルアップロード',
+    invLabel:'Invoice No.:',invPh:'例) LN-2026-001-01',
+    fdBoxLabel:'FDファイル（複数選択可）', fdBoxDefault:'クリックして選択',
+    fdGoBtn:'🔍 FD照合開始',
+    fds1:'① BL/IV照合', fds2:'② PL/その他照合', fds3:'③ 結果整理',
+    fdStep1:'BL / Invoice照合中...', fdStep2:'PL / 保険 / 追加条件照合中...', fdStep3:'結果整理中...',
+    fdNextBtn:'🔄 次のFD照合へ',
+    verdict:v=>v==='OK'?'総合判定: OK ✅':v==='NG'?'総合判定: NG ❌':'総合判定: 要確認 ⚠️',
+    sOK:'✅ OK', sNG:'❌ NG', sWarn:'⚠️ 要確認',
+    docsTitle:'📑 必要書類（46A）枚数確認',
+    dName:'書類名',dLc:'LC指定',dFd:'FD準備',dSt:'判定',
+    tobankTitle:'🏦 TO_BANK特記事項',
+    sumTitle:'📝 総合所見',
+    siSelectTitle:'🗂 照合するLCを選択',
+    siSelectEmpty:'先に① LC登録タブでLCを登録してください',
+    siUpTitle:'📊 SIデータアップロード（CSV / Excel）',
+    siBoxLabel:'COMPASSから出力したSIファイル', siBoxDefault:'クリックして選択',
+    siGoBtn:'🔍 SI確認開始',
+    sis1:'① SI読込', sis2:'② LC照合', sis3:'③ 結果整理',
+    siStep1:'SIデータ読み込み中...', siStep2:'LC条件と照合中...', siStep3:'結果整理中...',
+    siNextBtn:'🔄 次のSI確認へ',
+    siVerdict:v=>v==='OK'?'SI確認: OK ✅':v==='NG'?'SI確認: NG ❌':'SI確認: 要確認 ⚠️',
+    siSumTitle:'📝 SI所見・修正事項',
+    histTitle:'📚 チェック履歴', histEmpty:'チェック履歴はありません',
+    histClear:'🗑 履歴を全件削除', histClearConfirm:'履歴をすべて削除しますか？',
+    errPfx:'⚠️ エラー: ',
+    countries:['その他','タイ','ベトナム','インドネシア','フィリピン','マレーシア'],
+  }
+};
+const CV=['OTHER','THAILAND','VIETNAM','INDONESIA','PHILIPPINES','MALAYSIA'];
+
+// ═══════════════════════════════════════════
+//  전역 상태
+// ═══════════════════════════════════════════
+let LANG='ko';
+const DB={lcs:{},hist:[]};
+let selLcFd=null, selLcSi=null;
+let fdFiles=[], siRows=[], siFileName='';
+const AKEY='leenai_apikey_v1';
+
+const SYS=`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
+内部ルール：LC番号記載「LC番号 DATED ON 日付」/COUNTRY OF ORIGIN:JAPAN・FREIGHT PREPAID/AS ARRANGED はデフォルト自動出力/ADVISING BANK=SMBC/1コンテナ1アイテム/TOLERANCE通常10%`;
+
+function tx(k,...a){const v=TX[LANG][k];return typeof v==='function'?v(...a):(v??'');}
+
+// ═══════════════════════════════════════════
+//  API Key 管理
+// ═══════════════════════════════════════════
+function saveApiKey(){
+  const v=document.getElementById('apiKeyInput').value.trim();
+  if(!v){setApiStatus(tx('apiNone'),'ng');return;}
+  if(!v.startsWith('sk-ant-')){setApiStatus(tx('apiBadFmt'),'ng');return;}
+  localStorage.setItem(AKEY,v);
+  document.getElementById('apiKeyInput').value='';
+  setApiStatus(tx('apiSaved',v),'ok');
+}
+function clearApiKey(){
+  localStorage.removeItem(AKEY);
+  document.getElementById('apiKeyInput').value='';
+  setApiStatus(tx('apiCleared'),'ng');
+}
+function getApiKey(){return localStorage.getItem(AKEY)||'';}
+function setApiStatus(msg,type){
+  const el=document.getElementById('apiStatus');
+  el.textContent=msg;el.className=type;
+}
+function refreshApiStatus(){
+  const k=getApiKey();
+  setApiStatus(k?tx('apiRegistered',k):tx('apiNotRegistered'),k?'ok':'ng');
+}
+
+// ═══════════════════════════════════════════
+//  초기화 & 언어
+// ═══════════════════════════════════════════
+function initApp(lang){
+  LANG=lang;
+  document.getElementById('langScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  applyLang();
+  refreshApiStatus();
+}
+function switchLang(){
+  LANG=LANG==='ko'?'ja':'ko';
+  applyLang();
+  refreshApiStatus();
+}
+function applyLang(){
+  const L=TX[LANG];
+  document.getElementById('appTitle').textContent=L.appTitle;
+  document.getElementById('langSwBtn').textContent='🌐 '+L.langSw;
+  document.getElementById('apiLabel').textContent=L.apiLabel;
+  document.getElementById('apiSaveBtn').textContent=L.apiSave;
+  document.getElementById('apiClearBtn').textContent=L.apiClear;
+  document.getElementById('tab1').textContent=L.tab1;
+  document.getElementById('tab2').textContent=L.tab2;
+  document.getElementById('tab3').textContent=L.tab3;
+  document.getElementById('tab4').textContent=L.tab4;
+  document.getElementById('lcUpCardTitle').textContent=L.lcUpCard;
+  document.getElementById('contractLabel').textContent=L.contractLabel;
+  document.getElementById('lcContractNo').placeholder=L.contractPh;
+  document.getElementById('countryLabel').textContent=L.countryLabel;
+  document.getElementById('lcBoxLabel').textContent=L.lcBoxLabel;
+  document.getElementById('lcBoxName').textContent=L.lcBoxDefault;
+  document.getElementById('lcRegBtn').textContent=L.lcRegBtn;
+  document.getElementById('lcListTitle').textContent=L.lcListTitle;
+  document.getElementById('lcs1').textContent=L.lcs1;
+  document.getElementById('lcs2').textContent=L.lcs2;
+  document.getElementById('fdSelectTitle').textContent=L.fdSelectTitle;
+  document.getElementById('fdUpTitle').textContent=L.fdUpTitle;
+  document.getElementById('invLabel').textContent=L.invLabel;
+  document.getElementById('fdInvNo').placeholder=L.invPh;
+  document.getElementById('fdBoxLabel').textContent=L.fdBoxLabel;
+  document.getElementById('fdBoxName').textContent=L.fdBoxDefault;
+  document.getElementById('fdGoBtn').textContent=L.fdGoBtn;
+  document.getElementById('fds1').textContent=L.fds1;
+  document.getElementById('fds2').textContent=L.fds2;
+  document.getElementById('fds3').textContent=L.fds3;
+  document.getElementById('fdNextBtn').textContent=L.fdNextBtn;
+  document.getElementById('siSelectTitle').textContent=L.siSelectTitle;
+  document.getElementById('siUpTitle').textContent=L.siUpTitle;
+  document.getElementById('siBoxLabel').textContent=L.siBoxLabel;
+  document.getElementById('siBoxName').textContent=L.siBoxDefault;
+  document.getElementById('siGoBtn').textContent=L.siGoBtn;
+  document.getElementById('sis1').textContent=L.sis1;
+  document.getElementById('sis2').textContent=L.sis2;
+  document.getElementById('sis3').textContent=L.sis3;
+  document.getElementById('siNextBtn').textContent=L.siNextBtn;
+  document.getElementById('histTitle').textContent=L.histTitle;
+  document.getElementById('histClearBtn').textContent=L.histClear;
+  // 국가 셀렉트
+  const sel=document.getElementById('lcCountry');
+  const cur=sel.value;
+  sel.innerHTML=CV.map((v,i)=>`<option value="${v}">${L.countries[i]}</option>`).join('');
+  sel.value=cur||'OTHER';
+  renderLcList(); renderFdLcList(); renderSiLcList(); renderHist();
+}
+function switchTab(t){
+  ['lc','fd','si','hist'].forEach((id,i)=>{
+    document.querySelectorAll('.tab')[i].classList.toggle('active',id===t);
+    document.getElementById('tab-'+id).classList.toggle('active',id===t);
+  });
+}
+
+// ═══════════════════════════════════════════
+//  유틸
+// ═══════════════════════════════════════════
+async function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
+function mt(f){return f.type||(f.name.endsWith('.pdf')?'application/pdf':'image/jpeg');}
+async function toContent(arr){
+  const out=[];
+  for(const f of arr){const d=await b64(f),m=mt(f);
+    out.push(m==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:d}}:{type:'image',source:{type:'base64',media_type:m,data:d}});}
+  return out;
+}
+async function callApi(msgs,max=3500){
+  const k=getApiKey();
+  if(!k)throw new Error(LANG==='ko'?'API Key가 등록되지 않았습니다. 상단에서 입력 후 저장하세요.':'API Keyが登録されていません。上部で入力して保存してください。');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:max,system:SYS,messages:msgs})
+  });
+  const d=await r.json();
+  if(d.error)throw new Error(d.error.message);
+  return d.content.map(b=>b.text||'').join('');
+}
+function setSteps(ids,n){ids.forEach((id,i)=>{const e=document.getElementById(id);if(e)e.className='step'+(i+1<n?' done':i+1===n?' active':'');});}
+
+// ═══════════════════════════════════════════
+//  ① LC 등록
+// ═══════════════════════════════════════════
+function onLcFile(inp){
+  const fs=Array.from(inp.files);
+  document.getElementById('lcBox').classList.toggle('has',fs.length>0);
+  document.getElementById('lcBoxName').textContent=fs.length?fs.map(f=>f.name).join(', '):tx('lcBoxDefault');
+  document.getElementById('lcRegBtn').disabled=!fs.length;
+}
+async function registerLC(){
+  const contractNo=document.getElementById('lcContractNo').value.trim();
+  const country=document.getElementById('lcCountry').value;
+  const files=Array.from(document.getElementById('lcFile').files);
+  if(!files.length)return;
+  document.getElementById('lcRegBtn').disabled=true;
+  document.getElementById('lcProg').style.display='block';
+  setSteps(['lcs1','lcs2'],1);
+  document.getElementById('lcProgMsg').textContent=tx('lcAnalyzing');
+  try{
+    const c=await toContent(files);
+    const raw=await callApi([{role:'user',content:[...c,{type:'text',text:
+`このLCの以下を「項目名: 値」で1行ずつ出力してください。
+LC番号と日付, ISSUING BANK, APPLICANT, BENEFICIARY, EXPIRY DATE, LATEST SHIPMENT DATE, POL, POD,
+PARTIAL SHIPMENT, TRANSHIPMENT, TOLERANCE, 通貨・金額, 単価(UNIT PRICE), 数量(QUANTITY),
+42C決済条件(全文), BL CONSIGNEE(46A正確に), NOTIFY PARTY(46A正確に), FREIGHT条件, 保険条件,
+45A商品説明(全文), 47A追加条件(全文), 46A必要書類リスト(各書類名と枚数),
+現地AGENT BL記載要件(YES/NO), FAX NO記載要件(YES/NO), BENE CERT要件(YES/NO)`}]}],3500);
+    setSteps(['lcs1','lcs2'],2);
+    document.getElementById('lcProgMsg').textContent=tx('lcSaving');
+    const id='lc_'+(contractNo||Date.now());
+    DB.lcs[id]={id,contractNo:contractNo||'(미입력)',country,rawText:raw,
+      registeredAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),files:files.map(f=>f.name)};
+    await new Promise(r=>setTimeout(r,200));
+    document.getElementById('lcProg').style.display='none';
+    document.getElementById('lcRegBtn').disabled=false;
+    document.getElementById('lcFile').value='';
+    document.getElementById('lcBox').classList.remove('has');
+    document.getElementById('lcBoxName').textContent=tx('lcBoxDefault');
+    renderLcList(); renderFdLcList(); renderSiLcList();
+    alert(tx('lcDone',contractNo||id));
+  }catch(e){
+    document.getElementById('lcProg').style.display='none';
+    document.getElementById('lcRegBtn').disabled=false;
+    alert(tx('errPfx')+e.message);
+  }
+}
+function renderLcList(){
+  const el=document.getElementById('lcList');if(!el)return;
+  const items=Object.values(DB.lcs);
+  if(!items.length){el.innerHTML=`<div class="empty">${tx('lcEmpty')}</div>`;return;}
+  el.innerHTML=items.map(lc=>`
+    <div class="lc-item">
+      <div class="lc-head">
+        <div>
+          <div class="lc-title">📄 ${lc.contractNo}</div>
+          <div class="lc-meta">${lc.country} | ${lc.registeredAt}</div>
+          <div class="lc-meta" style="font-size:.61rem">${lc.files.join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="lc-badge">${tx('lcBadge')}</span>
+          <button class="del-btn" onclick="delLc('${lc.id}',event)">${tx('delBtn')}</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function delLc(id,e){
+  e.stopPropagation();
+  if(!confirm(tx('lcDelConfirm')))return;
+  delete DB.lcs[id];
+  if(selLcFd===id)selLcFd=null;
+  if(selLcSi===id)selLcSi=null;
+  renderLcList();renderFdLcList();renderSiLcList();
+}
+
+// ═══════════════════════════════════════════
+//  ② FD 대조
+// ═══════════════════════════════════════════
+function renderFdLcList(){
+  const el=document.getElementById('fdLcList');if(!el)return;
+  const items=Object.values(DB.lcs);
+  if(!items.length){el.innerHTML=`<div class="empty">${tx('fdSelectEmpty')}</div>`;updFdBtn();return;}
+  el.innerHTML=items.map(lc=>`
+    <div class="lc-item${selLcFd===lc.id?' selected':''}" onclick="pickLcFd('${lc.id}')">
+      <div class="lc-head">
+        <div><div class="lc-title">📄 ${lc.contractNo}</div><div class="lc-meta">${lc.country} | ${lc.registeredAt}</div></div>
+        ${selLcFd===lc.id?`<span class="lc-badge">${tx('selectedBadge')}</span>`:''}
+      </div>
+    </div>`).join('');
+  updFdBtn();
+}
+function pickLcFd(id){selLcFd=id;renderFdLcList();}
+function onFdFile(inp){
+  fdFiles=Array.from(inp.files);
+  document.getElementById('fdBox').classList.toggle('has',fdFiles.length>0);
+  document.getElementById('fdBoxName').textContent=fdFiles.length?fdFiles.map(f=>f.name).join(', '):tx('fdBoxDefault');
+  updFdBtn();
+}
+function updFdBtn(){document.getElementById('fdGoBtn').disabled=!(selLcFd&&fdFiles.length);}
+async function runFD(){
+  const lc=DB.lcs[selLcFd];if(!lc)return;
+  const invNo=document.getElementById('fdInvNo').value.trim();
+  const cNote=lc.country==='VIETNAM'?`【VIETNAM】BL NOTIFY PARTY税関形式必須。WASTE PAPERはBLにWASTE PAPER#HSCODE#XXKGS#XXBALES DEPOSIT NUMBER:XXX必須。`
+    :lc.country==='THAILAND'?'【THAILAND】全書類にSHIPPING MARK必須。':'';
+  document.getElementById('fdGoBtn').disabled=true;
+  document.getElementById('fdProg').style.display='block';
+  document.getElementById('fdResult').style.display='none';
+  setSteps(['fds1','fds2','fds3'],1);
+  try{
+    const fc=await toContent(fdFiles);
+    document.getElementById('fdProgMsg').textContent=tx('fdStep1');
+    const r1=await callApi([{role:'user',content:[...fc,{type:'text',text:
+`FD書類（BL・INVOICE）とLC条件を照合。
+--- LC ---\n${lc.rawText}\n--- 照合情報 ---
+Invoice No:${invNo||'未入力'} 対象国:${lc.country} ${cNote}
+【必須チェック】42C決済条件完全一致/45A商品説明一致(PARTIAL ALLOWED時は数量不足OK)/BL CONSIGNEE/NOTIFY PARTY/LC番号DATED ON形式/FAX NO
+形式: [OK/NG/WARN] カテゴリ > 項目 | 説明`}]}],3500);
+    setSteps(['fds1','fds2','fds3'],2);
+    document.getElementById('fdProgMsg').textContent=tx('fdStep2');
+    const r2=await callApi([{role:'user',content:[...fc,{type:'text',text:
+`FD書類（PL・保険・その他）とLC条件を照合。
+--- LC ---\n${lc.rawText}\n対象国:${lc.country} ${cNote}
+形式: [OK/NG/WARN] カテゴリ > 項目 | 説明
+必要書類: DOCS: 書類名 | LC指定 | FD準備 | OK/NG/WARN
+最後に必ず:
+TOBANK: (銀行提出時特記事項)
+SUMMARY: (総合所見)
+OVERALL: OK または NG または WARN`}]}],3500);
+    setSteps(['fds1','fds2','fds3'],3);
+    document.getElementById('fdProgMsg').textContent=tx('fdStep3');
+    await new Promise(r=>setTimeout(r,200));
+    const res=renderResult(r1+'\n'+r2,invNo,lc,'fd');
+    DB.hist.unshift({type:'FD',contractNo:lc.contractNo,invNo:invNo||'-',country:lc.country,
+      overall:res.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),html:document.getElementById('fdRc').innerHTML});
+    document.getElementById('fdProg').style.display='none';
+    document.getElementById('fdResult').style.display='block';
+    document.getElementById('fdGoBtn').disabled=false;
+  }catch(e){
+    document.getElementById('fdProg').style.display='none';
+    document.getElementById('fdResult').style.display='block';
+    document.getElementById('fdRc').innerHTML=`<div class="err">${tx('errPfx')}${e.message}</div>`;
+    document.getElementById('fdGoBtn').disabled=false;
+  }
+}
+function clearFd(){
+  fdFiles=[];
+  document.getElementById('fdFile').value='';
+  document.getElementById('fdBox').classList.remove('has');
+  document.getElementById('fdBoxName').textContent=tx('fdBoxDefault');
+  document.getElementById('fdInvNo').value='';
+  document.getElementById('fdResult').style.display='none';
+  updFdBtn();
+}
+
+// ═══════════════════════════════════════════
+//  ③ SI 체크
+// ═══════════════════════════════════════════
+function renderSiLcList(){
+  const el=document.getElementById('siLcList');if(!el)return;
+  const items=Object.values(DB.lcs);
+  if(!items.length){el.innerHTML=`<div class="empty">${tx('siSelectEmpty')}</div>`;updSiBtn();return;}
+  el.innerHTML=items.map(lc=>`
+    <div class="lc-item${selLcSi===lc.id?' selected':''}" onclick="pickLcSi('${lc.id}')">
+      <div class="lc-head">
+        <div><div class="lc-title">📄 ${lc.contractNo}</div><div class="lc-meta">${lc.country} | ${lc.registeredAt}</div></div>
+        ${selLcSi===lc.id?`<span class="lc-badge">${tx('selectedBadge')}</span>`:''}
+      </div>
+    </div>`).join('');
+  updSiBtn();
+}
+function pickLcSi(id){selLcSi=id;renderSiLcList();updSiBtn();}
+function parseCSV(text){
+  const lines=text.split('\n').filter(l=>l.trim());
+  if(!lines.length)return[];
+  if(lines[0].charCodeAt(0)===0xFEFF)lines[0]=lines[0].slice(1);
+  const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line=>{
+    const vals=[];let cur='',inQ=false;
+    for(let c of line){if(c==='"')inQ=!inQ;else if(c===','&&!inQ){vals.push(cur.trim());cur='';}else cur+=c;}
+    vals.push(cur.trim());
+    const obj={};headers.forEach((h,i)=>obj[h]=(vals[i]||'').replace(/^"|"$/g,''));
+    return obj;
+  });
+}
+async function onSiFile(inp){
+  const f=inp.files[0];if(!f)return;
+  siFileName=f.name;siRows=[];
+  document.getElementById('siBox').classList.remove('has');
+  document.getElementById('siBoxName').textContent=tx('siBoxDefault');
+  document.getElementById('siInfo').style.display='none';
+  try{
+    const name=f.name.toLowerCase();
+    if(name.endsWith('.csv')){siRows=parseCSV(await f.text());}
+    else{const buf=await f.arrayBuffer();siRows=XLSX.utils.sheet_to_json(XLSX.read(new Uint8Array(buf),{type:'array'}).Sheets[XLSX.read(new Uint8Array(buf),{type:'array'}).SheetNames[0]],{defval:''});}
+    document.getElementById('siBox').classList.add('has');
+    document.getElementById('siBoxName').textContent=`${f.name} (${siRows.length}행)`;
+    const info=document.getElementById('siInfo');
+    info.style.display='block';
+    info.innerHTML=LANG==='ko'?`전체 <strong>${siRows.length}행</strong> 읽기 완료`:`全<strong>${siRows.length}行</strong>読み込み完了`;
+  }catch(e){alert(tx('errPfx')+e.message);}
+  updSiBtn();
+}
+function updSiBtn(){document.getElementById('siGoBtn').disabled=!(selLcSi&&siRows.length);}
+async function runSI(){
+  const lc=DB.lcs[selLcSi];if(!lc)return;
+  document.getElementById('siGoBtn').disabled=true;
+  document.getElementById('siProg').style.display='block';
+  document.getElementById('siResult').style.display='none';
+  setSteps(['sis1','sis2','sis3'],1);
+  document.getElementById('siProgMsg').textContent=tx('siStep1');
+  try{
+    // LC番号キー抽出
+    const m=lc.rawText.match(/LC番号と日付:\s*([^\n\r]+)/i);
+    const lcKey=(m?m[1].trim():'').split(' ')[0];
+    let filtered=lcKey?siRows.filter(r=>String(r.SI_LC_No||'').includes(lcKey)):siRows;
+    if(!filtered.length)filtered=siRows;
+    const siText=filtered.map(r=>Object.entries(r).map(([k,v])=>v?`${k}:${v}`:'').filter(Boolean).join('|')).join('\n');
+    // SI件数更新
+    const info=document.getElementById('siInfo');
+    if(info)info.innerHTML=LANG==='ko'?`전체 <strong>${siRows.length}행</strong> 중 LC 해당 <strong>${filtered.length}건</strong>`:`全<strong>${siRows.length}行</strong>中 LC該当<strong>${filtered.length}件</strong>`;
+    setSteps(['sis1','sis2','sis3'],2);
+    document.getElementById('siProgMsg').textContent=tx('siStep2');
+    const cNote=lc.country==='VIETNAM'?`【VIETNAM】No_SI2件以上必須(なければWARN)/WASTE PAPERはSI_BL_TEXT1にWASTE PAPER#HSCODE#XXKGS#XXBALES DEPOSIT NUMBER:XXX必須(なければNG)/SI_BL_NotifyParty税関形式必須`
+      :lc.country==='THAILAND'?`【THAILAND】SI_ShippingMark空ならNG`:'';
+    const prompt=`以下のSI（Shipping Instruction）データとLC条件を照合してください。
+--- LC条件 ---\n${lc.rawText}
+--- SIデータ（COMPASS出力 ${filtered.length}件）---\n${siText}
+--- 対象国: ${lc.country} ---\n${cNote}
+
+【チェックルール】※以下はデフォルト自動出力のためチェック不要: COUNTRY OF ORIGIN:JAPAN / FREIGHT PREPAID/AS ARRANGED / SHIPPING AGENT現地情報(Localagent=TRUE時) / 船名・出発日・B/L番号
+1.[42C] SI_TERM_PAYMENTがLC 42Cと完全一致か → 不一致NG
+2.[45A] SI_CommodityがLC 45A商品名と完全一致か → 不一致NG
+3.[45A] SI_UPDがLC単価と一致か → 不一致NG
+4.[45A] SI_QTY: PARTIAL ALLOWED時は数量不足でもOK
+5.[LC番号] SI_LC_NoがLC番号 DATED ON 日付形式か → 不正NG
+6.[46A] SI_BL_CONSIGNEEがLC 46A指定と完全一致か → 不一致NG
+7.[46A] SI_BL_NotifyPartyがLC 46A指定形式と一致か → 不一致NG
+8.[44F] SI_POD1/2/3またはSI_PortOfDischrageがLC 44F(POD)と一致か → 不一致NG
+9.[46A] LC上に現地AGENT要件ある場合、SI_BL_LocalagentがTRUEか → FALSEならNG
+10.[46A] LC上にFAX NO要件ある場合、SI_FAX_CONまたはSI_Shipper_FAXが入力されているか → 空ならNG
+11.[VN+WP] SI_BL_TEXT1にWASTE PAPER#..#XXKGS#XXBALES DEPOSIT NUMBER:XXX形式あるか → なければNG
+12.[VN] No_SIが2件以上あるか → 1件のみWARN
+13.[TH] SI_ShippingMarkが入力されているか → 空ならNG
+14.[47A等] SI_TEXT_ALLにALL DOCUMENTS共通必須文句あるか → 必要なのに空WARN
+15.[45A/47A] SI_TEXT_INVOICEにINVOICE必須文句あるか → 必要なのに空WARN
+16.[BENE CERT] LC上に要件あり船積前判明情報ある場合、SI_TEXT_BENEが入力されているか → 空WARN
+17.[保険] SI外別手配。LC 46A保険条件を別途確認 → 常にWARN
+
+形式: [OK/NG/WARN] カテゴリ > 項目 | 説明
+最後に:
+SUMMARY: (SI所見。修正必須事項優先。BL発行前に直すべきことを明確に)
+OVERALL: OK または NG または WARN`;
+    const raw=await callApi([{role:'user',content:[{type:'text',text:prompt}]}],3500);
+    setSteps(['sis1','sis2','sis3'],3);
+    document.getElementById('siProgMsg').textContent=tx('siStep3');
+    await new Promise(r=>setTimeout(r,200));
+    const res=renderSiResult(raw,lc,filtered.length);
+    DB.hist.unshift({type:'SI',contractNo:lc.contractNo,invNo:siFileName,country:lc.country,
+      overall:res.overall,checkedAt:new Date().toLocaleString(LANG==='ko'?'ko-KR':'ja-JP'),html:document.getElementById('siRc').innerHTML});
+    document.getElementById('siProg').style.display='none';
+    document.getElementById('siResult').style.display='block';
+    document.getElementById('siGoBtn').disabled=false;
+  }catch(e){
+    document.getElementById('siProg').style.display='none';
+    document.getElementById('siResult').style.display='block';
+    document.getElementById('siRc').innerHTML=`<div class="err">${tx('errPfx')}${e.message}</div>`;
+    document.getElementById('siGoBtn').disabled=false;
+  }
+}
+function clearSi(){
+  siRows=[];siFileName='';
+  document.getElementById('siFile').value='';
+  document.getElementById('siBox').classList.remove('has');
+  document.getElementById('siBoxName').textContent=tx('siBoxDefault');
+  document.getElementById('siInfo').style.display='none';
+  document.getElementById('siResult').style.display='none';
+  updSiBtn();
+}
+
+// ═══════════════════════════════════════════
+//  결과 렌더링
+// ═══════════════════════════════════════════
+function parseCats(raw){
+  const cats={};
+  raw.split('\n').filter(l=>/^\[(OK|NG|WARN)\]/.test(l.trim())).forEach(l=>{
+    const m=l.trim().match(/^\[(OK|NG|WARN)\]\s*(.+?)\s*>\s*(.+?)\s*\|\s*(.*)/);
+    if(!m)return;
+    const[,st,cat,title,detail]=m;
+    if(!cats[cat])cats[cat]=[];
+    cats[cat].push({st,title,detail});
+  });
+  return cats;
+}
+function catsHtml(cats){
+  let h='';
+  Object.entries(cats).forEach(([cat,items])=>{
+    const ng=items.filter(i=>i.st==='NG').length,wn=items.filter(i=>i.st==='WARN').length;
+    const bh=ng?`<span class="badge b-ng">NG ${ng}</span>`:wn?`<span class="badge b-w">${LANG==='ko'?'요확인':'要確認'} ${wn}</span>`:`<span class="badge b-ok">OK</span>`;
+    h+=`<div class="sh"><span class="st">${cat}</span>${bh}</div>`;
+    items.forEach(i=>{
+      const cl=i.st==='OK'?'ok':i.st==='NG'?'ng':'warn';
+      const ic=i.st==='OK'?'✅':i.st==='NG'?'❌':'⚠️';
+      h+=`<div class="ci ${cl}"><span style="font-size:.85rem;flex-shrink:0">${ic}</span><div><div class="ctit">${i.title}</div><div class="cdesc">${i.detail}</div></div></div>`;
+    });
+  });
+  return h;
+}
+function scoreHtml(cats){
+  let ok=0,ng=0,wn=0;
+  Object.values(cats).forEach(items=>items.forEach(i=>{if(i.st==='OK')ok++;else if(i.st==='NG')ng++;else wn++;}));
+  return`<div class="srow">
+    <div class="sc"><div class="sn ok">${ok}</div><div class="sl">${tx('sOK')}</div></div>
+    <div class="sc"><div class="sn ng">${ng}</div><div class="sl">${tx('sNG')}</div></div>
+    <div class="sc"><div class="sn warn">${wn}</div><div class="sl">${tx('sWarn')}</div></div>
+  </div>`;
+}
+function renderResult(raw,invNo,lc,tab){
+  const cats=parseCats(raw);
+  const docLines=raw.split('\n').filter(l=>l.trim().startsWith('DOCS:'));
+  const tobM=raw.match(/TOBANK:\s*(.+?)(?=\nSUMMARY:|$)/s);
+  const sumM=raw.match(/SUMMARY:\s*(.+?)(?=\nOVERALL:|$)/s);
+  const ovM=raw.match(/OVERALL:\s*(OK|NG|WARN)/);
+  const overall=ovM?ovM[1]:'WARN';
+  const oc=overall==='OK'?'#22c55e':overall==='NG'?'#ef4444':'#f59e0b';
+  const oe=overall==='OK'?'✅':overall==='NG'?'❌':'⚠️';
+  let h=`<div class="verdict"><span style="font-size:1.7rem">${oe}</span>
+    <div><div class="v-text" style="color:${oc}">${tx('verdict',overall)}</div>
+    <div class="v-sub">${lc.contractNo} | ${lc.country}${invNo?' | Invoice: '+invNo:''}</div></div></div>
+    ${scoreHtml(cats)}${catsHtml(cats)}`;
+  if(docLines.length){
+    h+=`<div class="sh"><span class="st">${tx('docsTitle')}</span></div><div class="card" style="padding:9px"><table><tr><th>${tx('dName')}</th><th>${tx('dLc')}</th><th>${tx('dFd')}</th><th>${tx('dSt')}</th></tr>`;
+    docLines.forEach(l=>{const p=l.replace(/^DOCS:\s*/,'').split('|').map(s=>s.trim());
+      const sc=p[3]==='OK'?'var(--ok)':p[3]==='NG'?'var(--ng)':'var(--warn)';
+      const si=p[3]==='OK'?'✅':p[3]==='NG'?'❌':'⚠️';
+      h+=`<tr><td>${p[0]}</td><td style="text-align:center">${p[1]||'-'}</td><td style="text-align:center">${p[2]||'-'}</td><td style="text-align:center;color:${sc}">${si}</td></tr>`;
+    });
+    h+='</table></div>';
+  }
+  if(tobM)h+=`<div class="sh"><span class="st">${tx('tobankTitle')}</span></div><div class="sbox">${tobM[1].trim()}</div>`;
+  if(sumM)h+=`<div class="sh"><span class="st">${tx('sumTitle')}</span></div><div class="sbox">${sumM[1].trim()}</div>`;
+  document.getElementById(tab==='fd'?'fdRc':'siRc').innerHTML=h;
+  return{overall};
+}
+function renderSiResult(raw,lc,cnt){
+  const cats=parseCats(raw);
+  const sumM=raw.match(/SUMMARY:\s*(.+?)(?=\nOVERALL:|$)/s);
+  const ovM=raw.match(/OVERALL:\s*(OK|NG|WARN)/);
+  const overall=ovM?ovM[1]:'WARN';
+  const oc=overall==='OK'?'#22c55e':overall==='NG'?'#ef4444':'#f59e0b';
+  const oe=overall==='OK'?'✅':overall==='NG'?'❌':'⚠️';
+  let h=`<div class="verdict"><span style="font-size:1.7rem">${oe}</span>
+    <div><div class="v-text" style="color:${oc}">${tx('siVerdict',overall)}</div>
+    <div class="v-sub">${lc.contractNo} | ${lc.country} | SI ${cnt}件</div></div></div>
+    ${scoreHtml(cats)}${catsHtml(cats)}`;
+  if(sumM)h+=`<div class="sh"><span class="st">${tx('siSumTitle')}</span></div><div class="sbox">${sumM[1].trim()}</div>`;
+  document.getElementById('siRc').innerHTML=h;
+  return{overall};
+}
+
+// ═══════════════════════════════════════════
+//  ④ 이력
+// ═══════════════════════════════════════════
+function renderHist(){
+  const el=document.getElementById('histList');if(!el)return;
+  if(!DB.hist.length){el.innerHTML=`<div class="empty">${tx('histEmpty')}</div>`;return;}
+  el.innerHTML=DB.hist.map((h,i)=>{
+    const vc=h.overall==='OK'?'var(--ok)':h.overall==='NG'?'var(--ng)':'var(--warn)';
+    const ve=h.overall==='OK'?'✅':h.overall==='NG'?'❌':'⚠️';
+    const tb=h.type==='SI'?`<span class="badge-si">SI</span>`:`<span class="badge-fd">FD</span>`;
+    return`<div class="hist-item" onclick="showHist(${i})">
+      <div class="hist-head">
+        <div>${tb}<span class="hist-title">📄 ${h.contractNo} — ${h.invNo}</span>
+        <div class="hist-meta">${h.country} | ${h.checkedAt}</div></div>
+        <div style="font-size:.74rem;font-weight:700;color:${vc}">${ve} ${h.overall}</div>
+      </div></div>`;}).join('');
+}
+function showHist(i){
+  const h=DB.hist[i];
+  const tab=h.type==='SI'?'si':'fd';
+  document.getElementById(tab==='si'?'siRc':'fdRc').innerHTML=h.html;
+  document.getElementById(tab==='si'?'siResult':'fdResult').style.display='block';
+  switchTab(tab);
+  setTimeout(()=>document.getElementById(tab==='si'?'siResult':'fdResult').scrollIntoView({behavior:'smooth'}),100);
+}
+function clearHist(){
+  if(!confirm(tx('histClearConfirm')))return;
+  DB.hist=[];renderHist();
+}
+</script>
+</body>
+</html>
