@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI Tool v7.1 — LEENEAR</title>
+<title>LEENAI Tool v7.2 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;--accent:#4f7cff;--accent2:#7c4fff;--ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--text:#e8eaf0;--sub:#8b90a8;--r:12px;}
@@ -104,7 +104,7 @@ td{padding:4px;border-bottom:1px solid var(--border);}
 </head>
 <body>
 <h1>🔍 LEENAI — LC / FD / SI 統合チェックTool</h1>
-<div class="ver">LEENEAR CORPORATION — v7.1 | SharePoint連携</div>
+<div class="ver">LEENEAR CORPORATION — v7.2 | SharePoint連携</div>
 
 <!-- API Key -->
 <div class="api-bar">
@@ -138,16 +138,8 @@ td{padding:4px;border-bottom:1px solid var(--border);}
     <div class="ct">📄 新規LC分析 & SharePoint保存</div>
     <div class="crow">
       <label>契約番号:</label>
-      <input type="text" id="lcContNo" placeholder="例) LRS-2601A1" style="width:140px">
-      <label style="margin-left:4px">輸入国:</label>
-      <select id="lcCtry">
-        <option value="OTHER">その他</option>
-        <option value="VIETNAM">ベトナム</option>
-        <option value="THAILAND">タイ</option>
-        <option value="INDONESIA">インドネシア</option>
-        <option value="PHILIPPINES">フィリピン</option>
-        <option value="MALAYSIA">マレーシア</option>
-      </select>
+      <input type="text" id="lcContNo" placeholder="ファイル名から自動取得" style="width:200px">
+      <span id="lcContNoAuto" style="font-size:.65rem;color:var(--accent);margin-left:4px;display:none">📎 自動取得</span>
     </div>
     <div class="ubox" id="lcBox">
       <input type="file" id="lcFile" accept=".pdf,image/*" multiple onchange="onLcFile(this)">
@@ -363,11 +355,28 @@ function renderSpList(items){
 }
 
 // LC分析
+function extractContractNo(filename) {
+  // LRS-2603A1, LRS-2601HK1 등 패턴 추출
+  const m = filename.match(/([A-Z]{2,4}-\d{4}[A-Z0-9]{1,4})/);
+  return m ? m[1] : '';
+}
+
 function onLcFile(inp){
   lcFiles=Array.from(inp.files);
   document.getElementById('lcBox').classList.toggle('has',lcFiles.length>0);
   document.getElementById('lcFn').textContent=lcFiles.length?lcFiles.map(f=>f.name).join(', '):'クリックして選択';
   document.getElementById('lcBtn').disabled=!lcFiles.length;
+  // 계약번호 자동 추출
+  if(lcFiles.length>0){
+    const auto = extractContractNo(lcFiles[0].name);
+    const inp2 = document.getElementById('lcContNo');
+    const badge = document.getElementById('lcContNoAuto');
+    if(auto && !inp2.value){
+      inp2.value = auto;
+      badge.style.display='inline';
+      setTimeout(()=>badge.style.display='none', 3000);
+    }
+  }
 }
 async function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
 async function callApi(msgs,max=4000){
