@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI Tool v7.0 — LEENEAR</title>
+<title>LEENAI Tool v7.1 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3350;--accent:#4f7cff;--accent2:#7c4fff;--ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--text:#e8eaf0;--sub:#8b90a8;--r:12px;}
@@ -104,7 +104,7 @@ td{padding:4px;border-bottom:1px solid var(--border);}
 </head>
 <body>
 <h1>🔍 LEENAI — LC / FD / SI 統合チェックTool</h1>
-<div class="ver">LEENEAR CORPORATION — v7.0 | SharePoint連携</div>
+<div class="ver">LEENEAR CORPORATION — v7.1 | SharePoint連携</div>
 
 <!-- API Key -->
 <div class="api-bar">
@@ -439,7 +439,7 @@ async function analyzeLc(){
   "bankNotes": "この銀行特有の注意点",
   "checkPoints": ["必須チェックポイント"],
   "warnings": ["Discrepancyになりやすい条件"],
-  "rawText": "LC全文テキスト（FD/SI照合用）",
+  "rawText": "LC全文テキスト — 以下の全情報を漏れなく含める: LC番号/日付/発行銀行/買主/売主/金額/TOLERANCE/積地/揚地/PARTIAL/TRANSHIP/有効期限/最終船積日/42C全文/45A全文/46A全書類と枚数/47A全文/48条件/71D/78/保険条件",
   "analyzedAt": "${new Date().toISOString()}",
   "fileNames": ${JSON.stringify(lcFiles.map(f=>f.name))}
 }`});
@@ -574,24 +574,117 @@ async function runFd(){
   try{
     const fc=[];
     for(const f of fdFiles){const d=await b64(f);const m=f.type||(f.name.endsWith('.pdf')?'application/pdf':'image/jpeg');fc.push(m==='application/pdf'?{type:'document',source:{type:'base64',media_type:'application/pdf',data:d}}:{type:'image',source:{type:'base64',media_type:m,data:d}});}
-    document.getElementById('fdMsg').textContent='BL / Invoice照合中...';
+    document.getElementById('fdMsg').textContent='INVOICE / B/L 精密照合中...';
     const r1=await callApi([{role:'user',content:[...fc,{type:'text',text:
-`FD書類（BL・INVOICE）とLC条件を照合。
---- LC ---\n${lcInfo}\n--- 情報 ---
-Invoice No:${invNo||'未入力'} 対象国:${lcMeta.country} ${cNote}
-【必須チェック】42C完全一致/45A商品説明一致(PARTIAL時数量不足OK)/BL CONSIGNEE/NOTIFY PARTY/LC番号DATED ON形式/FAX NO
-形式: [OK/NG/WARN] カテゴリ > 項目 | 説明`}]}],3500);
+`あなたはLEENEAR CORPORATIONの厳格な貿易書類審査専門家です。
+銀行が書類を拒絶するとDiscrepancy Feeが発生し、最悪の場合決済不能になります。
+一点一点、絶対に見逃さない姿勢で審査してください。
+
+=== LC条件（照合基準）===
+${lcInfo}
+
+=== 照合情報 ===
+Invoice No: ${invNo||'未入力'} | 対象国: ${lcMeta.country}
+${cNote}
+
+=== INVOICE 精密チェック ===
+以下を一項目ずつ確認してください:
+1. LC番号記載: 「LC番号 DATED ON 発行日」形式で完全一致か（スペース・大文字小文字含む）
+2. 42C決済条件: LC 42Cの全文がINVOICEに完全一致で記載されているか
+3. 45A商品説明: LCの45A全文とINVOICEの商品説明が一字一句一致しているか（略語・順序・スペース含む）
+4. 単価: LC指定単価と完全一致か（通貨・数値・単位）
+5. 数量: LC指定数量と一致か（PARTIAL ALLOWED時は超過のみNG、不足はOK）
+6. 金額: 数量×単価の計算が正確か、TOLERANCE範囲内か
+7. INCOTERMS: LC指定のINVOICEと一致か（港名・年号含む）
+8. COUNTRY OF ORIGIN: JAPAN の記載があるか
+9. 受益者(BENEFICIARY)情報: 名称・住所が正確か
+10. 買主(APPLICANT)情報: 名称・住所がLC指定と完全一致か
+11. 日付: INVOICE日付がLC有効期限内かつ最終船積日以前か
+12. 47A条件で全書類に記載必須の事項がINVOICEに含まれているか（LC番号・発行日等）
+13. 言語: 英語で記載されているか
+
+=== B/L 精密チェック ===
+14. B/L CONSIGNEE: LC 46A指定と一字一句完全一致か（TO ORDER OF～等正確に）
+15. NOTIFY PARTY: LC 46A指定と完全一致か（TEL/FAX含む全情報）
+16. FAX NO: LC 46A要件がある場合、FAX NOが正確に記載されているか
+17. FREIGHT条件: LC指定（PREPAID/COLLECT）と一致か、正確な文言か
+18. PORT OF LOADING: LC 44E指定と一致か（ANY PORT IN JAPANの場合は日本港か確認）
+19. PORT OF DISCHARGE: LC 44F指定と完全一致か（港名・国名）
+20. ON BOARD表記: CLEAN SHIPPED ON BOARD表記があるか、日付があるか
+21. 船積日: LC最終船積日以前か
+22. PARTIAL SHIPMENT: LC 43P条件に抵触していないか
+23. TRANSHIPMENT: LC 43T条件に抵触していないか
+24. B/L種類: LC指定通りか（FULL SET 3/3等）
+25. SHIPPING AGENT: ${lcMeta.country==='VIETNAM'?'ベトナム現地SHIPPING AGENTのNAME/ADDRESS/TEL/FAX NOが記載されているか（LC 46A要件）':lcMeta.country==='THAILAND'?'SHIPPING MARK全書類記載':'LC要件確認'}
+26. ${lcMeta.country==='VIETNAM'?'BL TEXT: WASTE PAPER#HSCODE#XXKGS#XXBALES DEPOSIT NUMBER:XXX形式の記載があるか':'その他国別特記事項確認'}
+27. 47A ALL DOCUMENTS条件: 全書類共通記載事項がB/Lに含まれているか
+
+各チェック結果を以下の形式で出力（絶対に省略しない）:
+[OK/NG/WARN] カテゴリ > 項目名 | 詳細説明（NGの場合は具体的な不一致内容を記載）`}]}],4000);
+
     setStep(['fs1','fs2','fs3'],2);
-    document.getElementById('fdMsg').textContent='PL / 保険 / 追加条件照合中...';
+    document.getElementById('fdMsg').textContent='PL / 保険 / その他書類 精密照合中...';
     const r2=await callApi([{role:'user',content:[...fc,{type:'text',text:
-`FD書類（PL・保険・その他）とLC照合。
---- LC ---\n${lcInfo}\n対象国:${lcMeta.country} ${cNote}
-形式: [OK/NG/WARN] カテゴリ > 項目 | 説明
-書類枚数: DOCS: 書類名 | LC指定 | FD準備 | OK/NG/WARN
-最後に:
-TOBANK: (特記事項)
-SUMMARY: (総合所見)
-OVERALL: OK または NG または WARN`}]}],3500);
+`引き続き以下の書類を厳密に審査してください。
+
+=== LC条件 ===
+${lcInfo}
+対象国: ${lcMeta.country} ${cNote}
+
+=== PACKING LIST 精密チェック ===
+1. 商品説明: INVOICEおよびLC 45Aと一致しているか
+2. 数量: INVOICEと一致しているか
+3. 総重量・梱包数: 記載があり妥当か
+4. COUNTRY OF ORIGIN: JAPAN の記載があるか
+5. LC番号・発行日の記載があるか（47A条件）
+6. SHIPPING MARKの記載: ${lcMeta.country==='THAILAND'?'タイ向け必須 — 記載があるか':'LC要件に応じて確認'}
+
+=== 保険書類（INSURANCE）精密チェック ===
+7. 保険金額: INVOICE金額の110%以上（またはLC指定比率）になっているか — 計算値を示すこと
+8. 保険条件: LC指定（ALL RISKS等）と完全一致か
+9. CLAIMS PAYABLE: LC指定国・場所で支払われる条件になっているか
+10. 保険代理店: LC指定の国・場所の保険代理店が指定されているか（NAMED INSURANCE AGENT）
+11. 裏書: ENDORSED IN BLANKになっているか
+12. 原本枚数: FULL SET（LC指定枚数）が揃っているか
+13. TOTAL NUMBER OF ORIGINALS: 発行枚数の記載があるか
+14. 被保険者（ASSURED）: LC条件に合致しているか
+15. 通貨: INVOICE通貨と同じか
+
+=== CERTIFICATE OF ORIGIN（原産地証明）精密チェック ===
+16. 発行者: LC 46A指定通り（BENEFICIARY発行等）か
+17. COUNTRY OF ORIGIN: JAPAN の記載があるか
+18. 商品説明・数量: INVOICEと一致しているか
+19. 枚数: LC 46A指定枚数（ORIGINALS）が揃っているか
+
+=== BENEFICIARY CERTIFICATE（受益者証明）精密チェック ===
+20. LC 47Aで要求されている文言が完全に記載されているか
+21. 署名・日付があるか
+22. LC指定の形式に準拠しているか
+
+=== 必要書類 枚数確認 ===
+各書類について「書類名 | LC指定（ORIGINAL枚数/COPY枚数） | 実際の準備 | 判定」の形式で出力:
+DOCS: 書類名 | LC指定 | FD準備 | OK/NG/WARN
+
+=== 47A追加条件 全項目チェック ===
+47Aの各条件番号ごとに対応状況を確認:
+23. ONE ADDITIONAL COPY/PHOTOCOPY条件: 全書類のコピーが準備されているか
+24. DISCREPANCY FEE条件: 認識・対応済みか
+25. LC番号・発行日: 全書類への記載確認
+26. 英語記載・日付付き: 全書類で確認
+27. T.T.R NOT ALLOWED: 対応済みか
+28. APPLICANT住所記載条件: 対応済みか
+29. その他47A条件: 漏れなく確認
+
+=== 提出期限チェック ===
+30. 船積後提出期限（${lcMeta.presentationDays||'LC記載'}日以内）: 対応可能か
+
+各チェック結果（絶対に省略しない）:
+[OK/NG/WARN] カテゴリ > 項目名 | 詳細説明
+
+最後に必ず以下を出力:
+TOBANK: （銀行提出DRAFTへの必須記載事項。47A ALL DOCUMENTS条件があれば具体的文言を記載）
+SUMMARY: （総合所見。修正必須事項を優先順位順に列挙。「〇〇の△△が××となっているが、LC指定は□□であるため修正必要」のように具体的に）
+OVERALL: OK または NG または WARN`}]}],4000);
     setStep(['fs1','fs2','fs3'],3);
     await new Promise(r=>setTimeout(r,200));
     const res=renderCheckResult(r1+'\n'+r2,invNo,lcMeta,'fd');
