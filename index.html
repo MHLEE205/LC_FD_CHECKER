@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.14 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.15 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -242,13 +242,26 @@ select.fi{cursor:pointer;height:34px;}
 .fi-past-ng-val{flex:1;color:var(--sub);white-space:pre-wrap;word-break:break-all;font-size:.61rem;}
 .past-apply-inline{background:rgba(13,148,136,.18);border:1px solid rgba(13,148,136,.35);border-radius:4px;color:var(--teal);font-size:.6rem;padding:1px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;}
 .past-apply-inline:hover{background:rgba(13,148,136,.32);}
+/* ── AI 결과 항목 카드 (Phase5) ── */
+.ai-result-wrap{margin-top:8px;}
+.ai-result-header{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:700;color:var(--ok);margin-bottom:6px;flex-wrap:wrap;}
+.ai-result-ref{font-size:.63rem;color:var(--sub);margin-bottom:8px;word-break:break-all;}
+.ai-result-item{display:flex;gap:6px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border2);font-size:.68rem;}
+.ai-result-item:last-child{border-bottom:none;}
+.ai-result-icon{flex-shrink:0;font-size:.75rem;margin-top:1px;}
+.ai-result-label{font-weight:700;color:var(--text);margin-bottom:2px;font-size:.67rem;}
+.ai-result-note{color:var(--sub);font-size:.65rem;line-height:1.5;}
+.ai-conf-badge{font-size:.63rem;padding:1px 7px;border-radius:99px;font-weight:700;}
+.ai-conf-high{background:rgba(34,197,94,.15);color:var(--ok);}
+.ai-conf-mid{background:rgba(234,179,8,.15);color:var(--warn);}
+.ai-conf-low{background:rgba(239,68,68,.15);color:var(--ng);}
 </style>
 </head>
 <body>
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.14 (2026-06-10) | fetchPastSIs 후 인라인 힌트 즉시 반영</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.15 (2026-06-10) | AI결과 왼쪽패널 이동 + 항목별 포맷</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -257,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.14 (2026-06-10) | fetchPastSIs 후 인라인 힌트 즉시 반영</span>
+  <span>LEENEAR CORPORATION — v2.15 (2026-06-10) | AI결과 왼쪽패널 이동 + 항목별 포맷</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -668,6 +681,8 @@ select.fi{cursor:pointer;height:34px;}
           <div class="ct" style="font-size:.7rem;">📋 LC情報</div>
           <div id="compLcSummary"></div>
           <button class="btn btn-s" onclick="resetCompForm()" style="margin-top:10px;font-size:.7rem;">← LC選択に戻る</button>
+          <!-- AI 결과 박스 -->
+          <div id="compAiNote" style="margin-top:10px;"></div>
         </div>
       </div>
 
@@ -688,7 +703,6 @@ select.fi{cursor:pointer;height:34px;}
             <div id="compAiProg" style="padding:7px 0;display:none;">
               <div style="font-size:.73rem;color:var(--sub);display:flex;align-items:center;gap:7px;"><span class="spinner"></span><span id="compAiMsg">解析中...</span></div>
             </div>
-            <div id="compAiNote" style="margin-top:8px;"></div>
           </div>
           <div id="compVnWrap" style="display:none;">
             <div class="alert alert-vn">🇻🇳 <strong>ベトナム向け:</strong> SI#1（BL用）と SI#2（IV・PL用）の <strong>2件入力が必須</strong>です。</div>
@@ -3310,6 +3324,48 @@ function applyAllSiFields(idx) {
   if(noteEl) noteEl.innerHTML=`<div class="alert alert-ok">✅ SI #${idx+1} (${si._sc_no||''}) の内容を適用しました。LC固有値（支払期限・POD・ALL等）は維持されています。</div>`;
 }
 
+/* AI 결과를 항목별 카드로 렌더링 */
+function renderAiNote(ai, sourceLabel) {
+  const noteEl = document.getElementById('compAiNote');
+  if(!noteEl) return;
+
+  const conf    = String(ai.confidence || '').toLowerCase();
+  const confCls = conf === 'high' ? 'ai-conf-high' : conf === 'medium' ? 'ai-conf-mid' : 'ai-conf-low';
+  const confTxt = conf === 'high' ? '🟢 高'         : conf === 'medium' ? '🟡 中'        : '🔴 低';
+
+  const refNos = Array.isArray(ai.refSiNos)
+    ? ai.refSiNos.join(', ')
+    : (ai.refSiNo || '');
+
+  let itemsHtml = '';
+  if(Array.isArray(ai.items) && ai.items.length > 0) {
+    itemsHtml = ai.items.map(item => `
+      <div class="ai-result-item">
+        <span class="ai-result-icon">${esc(item.icon || '📌')}</span>
+        <div>
+          <div class="ai-result-label">${esc(item.label || '')}</div>
+          <div class="ai-result-note">${esc(item.note || '')}</div>
+        </div>
+      </div>`).join('');
+  } else if(ai.note) {
+    itemsHtml = `<div class="ai-result-item">
+      <span class="ai-result-icon">📌</span>
+      <div><div class="ai-result-note">${esc(ai.note)}</div></div>
+    </div>`;
+  }
+
+  noteEl.innerHTML = `
+    <div class="ai-result-wrap">
+      <div class="ai-result-header">
+        ✅ 完成SI作成完了
+        <span class="ai-conf-badge ${confCls}">${confTxt}</span>
+        <span style="font-size:.6rem;color:var(--sub);font-weight:400;">${esc(sourceLabel||'')}</span>
+      </div>
+      ${refNos ? `<div class="ai-result-ref">📋 参照: <strong style="color:#86efac;">${esc(refNos)}</strong></div>` : ''}
+      ${itemsHtml}
+    </div>`;
+}
+
 /* 過去SI参照でフォーム改善 — Phase3: Dataverse優先/Excel폴백 */
 async function runSiRefImprove(lc, pastSIs){
   const noteEl=document.getElementById('compAiNote');
@@ -3410,26 +3466,29 @@ POD(44F): ${lc.pod||''}
 === 過去SI実績（${sourceLabel}）===
 ${siSummary}
 
-【出力ルール】
-- JSONのみ出力（前置き・説明・コードブロック不要）
-- 完成した値を直接記入（「LCの〜を参照」等の説明文不可）
-- noteには「判断根拠と信頼度の説明」を日本語で記載
-
+【出力形式】JSONのみ。前置き・コードブロック不要。
 {
-  "consignee": "完成した荷受人（改行は\\nで表現）",
-  "notifyParty": "完成した会社名のみ（住所・TEL・FAX含めない）",
-  "address": "完成した住所・連絡先（過去SI書式を参考）",
-  "tel": "完成したTEL（過去SI表記形式）",
-  "fax": "完成したFAX（過去SI表記形式）",
-  "paymentDeadline": "完成した支払期限（LC 42C条件厳守）",
-  "paymentTerms": "完成したINDICATIONS含む支払条件",
-  "pod1": "完成した1st Port of Delivery",
-  "blText1": "完成したBL Text1（PO番号・Licence番号等）",
-  "all": "完成した全書類共通文句（LC 47A条件厳守）",
-  "confidence": "high / medium / low — 過去SI一致度",
-  "refSiNo": "参照に使用したSC番号（複数はカンマ区切り）",
-  "improved": true,
-  "note": "判断根拠・信頼度の説明（日本語）"
+  "consignee":       "完成値",
+  "notifyParty":     "完成値（会社名のみ）",
+  "address":         "完成値",
+  "tel":             "完成値",
+  "fax":             "完成値",
+  "paymentDeadline": "完成値",
+  "paymentTerms":    "完成値",
+  "pod1":            "完成値",
+  "blText1":         "完成値",
+  "all":             "完成値",
+  "invoiceText":     "完成値",
+  "beneText":        "完成値（不要なら空文字）",
+  "refSiNos":        ["参照SI契約番号1", "参照SI契約番号2"],
+  "confidence":      "high/medium/low",
+  "items": [
+    {"icon": "👤", "label": "Consignee / Notify / Address / TEL / FAX", "note": "判断根拠を1〜2文で（日本語）"},
+    {"icon": "💳", "label": "支払期限 / 支払条件", "note": "判断根拠"},
+    {"icon": "🚢", "label": "POD", "note": "判断根拠"},
+    {"icon": "📄", "label": "BL Text", "note": "判断根拠"},
+    {"icon": "📋", "label": "ALL / InvoiceText / BeneCert", "note": "判断根拠"}
+  ]
 }`}]}],4000);
 
     const clean=raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
@@ -3437,21 +3496,22 @@ ${siSummary}
     if(!jm) return;
     const ai=JSON.parse(jm[0]);
 
-    if(ai.consignee)     siVals.consignee=ai.consignee;
-    if(ai.notifyParty)   siVals.notifyParty=ai.notifyParty;
-    if(ai.address)       siVals.address=ai.address;
-    if(ai.tel)           siVals.tel=ai.tel;
-    if(ai.fax)           siVals.fax=ai.fax;
+    if(ai.consignee)       siVals.consignee=ai.consignee;
+    if(ai.notifyParty)     siVals.notifyParty=ai.notifyParty;
+    if(ai.address)         siVals.address=ai.address;
+    if(ai.tel)             siVals.tel=ai.tel;
+    if(ai.fax)             siVals.fax=ai.fax;
     if(ai.paymentDeadline) siVals.paymentDeadline=ai.paymentDeadline;
-    if(ai.paymentTerms)  siVals.paymentTerms=ai.paymentTerms;
-    if(ai.pod1)          siVals.pod1=ai.pod1;
-    if(ai.blText1)       siVals.blText1=ai.blText1;
-    if(ai.all)           siVals.all=ai.all;
+    if(ai.paymentTerms)    siVals.paymentTerms=ai.paymentTerms;
+    if(ai.pod1)            siVals.pod1=ai.pod1;
+    if(ai.blText1)         siVals.blText1=ai.blText1;
+    if(ai.all)             siVals.all=ai.all;
+    if(ai.invoiceText)     siVals.invoiceText=ai.invoiceText;
+    if(ai.beneText)        siVals.beneText=ai.beneText;
     if(compVnMode&&siVals2){ if(ai.all) siVals2.all=ai.all; }
     renderCompFormContent();
 
-    const confBadge=ai.confidence==='high'?'🟢 高':ai.confidence==='medium'?'🟡 中':ai.confidence==='low'?'🔴 低':'';
-    if(noteEl) noteEl.innerHTML=`<div class="alert alert-ok">✅ 完成SI作成完了 (${sourceLabel})<br>📋 参照: <span style="color:#86efac;font-weight:700;">${esc(ai.refSiNo||refNos)}</span> 信頼度: ${confBadge}${ai.note?'<br>📌 '+esc(ai.note):''}</div>`;
+    renderAiNote(ai, sourceLabel);
   }catch(e){
     if(noteEl) noteEl.innerHTML=`<div class="alert alert-warn">⚠️ 過去SI参照に失敗しました。手動で確認してください。</div>`;
   }
