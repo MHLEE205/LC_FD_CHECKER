@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>COMPASS SI Debug Tool v1.0 — LEENEAR</title>
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#1f2b40;
+  --border:#2e3350;--border2:#3a4460;
+  --accent:#4f7cff;--accent2:#7c4fff;
+  --teal:#0d9488;--teal2:#0891b2;--tealg:linear-gradient(135deg,#0d9488,#0891b2);
+  --ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--info:#60a5fa;--purple:#a78bfa;
+  --text:#e8eaf0;--sub:#8b90a8;--sub2:#4a5f80;--r:12px;
+  --shadow:0 4px 24px rgba(0,0,0,.35);
+}
+[data-theme="light"]{
+  --bg:#f4f6fb;--surface:#ffffff;--surface2:#f0f4ff;--surface3:#e8edf7;
+  --border:#d1d5db;--border2:#c4cad5;
+  --text:#111827;--sub:#6b7280;--sub2:#9ca3af;
+  --shadow:0 4px 24px rgba(0,0,0,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;max-width:900px;margin:0 auto;padding:20px 16px 60px;}
+h1{font-size:1.1rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px;}
+.ver{font-size:.68rem;color:var(--sub);margin-bottom:16px;}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+.step-title{font-size:.75rem;font-weight:700;color:var(--teal);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;}
+.result-json{background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:10px 12px;font-family:monospace;font-size:.7rem;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;color:var(--sub);}
+.si-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;}
+.field-row{display:flex;gap:8px;margin-bottom:5px;font-size:.72rem;}
+.field-label{color:var(--sub);min-width:130px;flex-shrink:0;}
+.field-value{color:var(--text);flex:1;white-space:pre-wrap;word-break:break-all;}
+.badge-ok{background:rgba(34,197,94,.15);color:#86efac;padding:2px 8px;border-radius:99px;font-size:.65rem;}
+.badge-warn{background:rgba(234,179,8,.15);color:#fde047;padding:2px 8px;border-radius:99px;font-size:.65rem;}
+.badge-ng{background:rgba(239,68,68,.15);color:#fca5a5;padding:2px 8px;border-radius:99px;font-size:.65rem;}
+.url-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:monospace;font-size:.65rem;color:var(--sub2);word-break:break-all;margin-top:4px;}
+.count-badge{font-size:.72rem;color:var(--sub);margin-bottom:8px;}
+button{border:none;border-radius:8px;padding:8px 18px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
+#loginBtn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+#logoutBtn{background:var(--surface2);border:1px solid var(--border);color:var(--sub);}
+#searchBtn{background:var(--tealg);color:#fff;}
+#searchBtn:hover{opacity:.87;transform:translateY(-1px);}
+input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 10px;font-size:.8rem;outline:none;}
+input:focus{border-color:var(--teal);}
+input::placeholder{color:var(--sub2);}
+.empty-msg{font-size:.72rem;color:var(--sub);padding:8px 0;}
+.section-divider{border-top:1px solid var(--border2);margin:8px 0;}
+</style>
+</head>
+<body>
+
+<h1>🔍 COMPASS SI Debug Tool</h1>
+<div class="ver" id="header-sub">LEENEAR CORPORATION — v1.0 (2026-06-10) | COMPASS SI Dataverse 검증 툴</div>
+
+<!-- ① 로그인 -->
+<div class="step-card">
+  <div class="step-title">① COMPASS ログイン</div>
+  <div id="loginStatus" style="margin-bottom:8px;"></div>
+  <button id="loginBtn" onclick="startLogin()">🔑 COMPASSにログイン</button>
+  <button id="logoutBtn" onclick="doLogout()" style="display:none;">ログアウト</button>
+</div>
+
+<!-- ② 검색 입력 -->
+<div class="step-card">
+  <div class="step-title">② 検索条件入力</div>
+  <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+    <div>
+      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">계약번호 (SC No)</div>
+      <input type="text" id="scNoInput" placeholder="例) LRS-2604MG1" style="width:180px;">
+    </div>
+    <div>
+      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">이번 LC 번호 (은행 감지용)</div>
+      <input type="text" id="lcNoInput" placeholder="例) MI60526000243" style="width:220px;">
+    </div>
+    <button id="searchBtn" onclick="runSearch()">🔍 検索実行</button>
+  </div>
+</div>
+
+<!-- ③ 결과 -->
+<div id="resultsArea" style="display:none;">
+  <div class="step-card">
+    <div class="step-title">Step A — Buyer 코드 &amp; 은행 감지</div>
+    <div id="stepAResult"></div>
+  </div>
+  <div class="step-card">
+    <div class="step-title">Step B — cr49f_sale_contracts 검색 결과</div>
+    <div id="stepBUrl" class="url-box" style="margin-bottom:8px;"></div>
+    <div id="stepBResult"></div>
+  </div>
+  <div class="step-card">
+    <div class="step-title">Step C — cr49f_s_is 조회 결과 (전체)</div>
+    <div id="stepCResult"></div>
+  </div>
+  <div class="step-card">
+    <div class="step-title">Step D — 은행 필터 후 최종 결과 (Max 3건)</div>
+    <div id="stepDResult"></div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:.65rem;color:var(--sub);margin-top:30px;padding-top:14px;border-top:1px solid var(--border);">
+  ✦ Powered by LEENAI Automation System<br>
+  COMPASS SI Debug Tool v1.0 | LEENEAR CORPORATION
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// SECTION: BUYER_BANK_MASTER
+// ⚠️ 이 블록만 수정하면 전체 Buyer/은행 패턴이 업데이트됨
+// ══════════════════════════════════════════════════════════════
+const BUYER_BANK_MASTER = {
+  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"기타",prefixes:["ILTEB"]}]},
+  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"기타",prefixes:["1331U"]}]},
+  "CR": { name:"JP CORELEX (VIETNAM)",          banks:[
+    {bankName:"BIDV (Ho Chi Minh)",   prefixes:["2500511","2600511"], normalize:"BIDV_HCM"},
+    {bankName:"WOORI BANK Vietnam",   prefixes:["ILC25","ILC26"],     normalize:"WOORI_VN"},
+    {bankName:"BIDV (HCM 2지점)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
+    {bankName:"기타",                 prefixes:["0124IL"]}
+  ]},
+  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"기타",prefixes:["M4258"]}]},
+  "DN": { name:"DONGWON PAPER",                 banks:[{bankName:"WOORI BANK",            prefixes:["M42K5","M88ST"]}]},
+  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"단일은행",              prefixes:["I02","I03","LCUHW"]}]},
+  "HK": { name:"HKB - HOALU PAPER",             banks:[{bankName:"VIETINBANK",            prefixes:["0142IL"]}]},
+  "IK": { name:"INDAH KIAT",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI771"]},{bankName:"WOORI BANK",prefixes:["ILC03"]}]},
+  "KC": { name:"TKC KRAFT",                     banks:[{bankName:"BIDV Vietnam",          prefixes:["LI24B","LI25B","LI26B"], normalize:"BIDV_VN"}]},
+  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"기타",prefixes:["000ILU"]}]},
+  "NT": { name:"NATURA PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M0609"]},{bankName:"WOORI BANK NY",prefixes:["MD2QR"]}]},
+  "PC": { name:"PAPER COREA",                   banks:[{bankName:"WOORI BANK NY",         prefixes:["MD2QR"]},{bankName:"WOORI BANK LA",prefixes:["M0609"]}]},
+  "PI": { name:"PINDO DELI",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI601"]}]},
+  "SG": { name:"SAIGON PAPER CORPORATION",      banks:[
+    {bankName:"VIETCOMBANK (CAI MEP)", prefixes:["3640IL"]},
+    {bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26"], normalize:"WOORI_VN"},
+    {bankName:"기타",                  prefixes:["TF250"]}
+  ]},
+  "TA": { name:"THUAN AN PAPER",                banks:[{bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26","ILC24"], normalize:"WOORI_VN"}]},
+  "TH": { name:"THAI PAPER MILL CO., LTD",      banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]}]},
+  "TJ": { name:"TJIWI KIMIA",                   banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]}]},
+  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"단일은행 (CLO시리얼)",  prefixes:["CLO"]}]},
+  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"기타",prefixes:["T261","T252"]}]},
+  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"기타",prefixes:["241LC"]}]},
+};
+
+function extractBuyerCode(scNo) {
+  const m = String(scNo || '').match(/LRS-\d{4}([A-Z]+)\d/);
+  return m ? m[1] : null;
+}
+
+function detectBankGroup(lcNo, buyerCode) {
+  const master = BUYER_BANK_MASTER[buyerCode];
+  if (!master) return null;
+  const lcBase = String(lcNo || '').split(' DATED')[0].trim().toUpperCase();
+  for (const bank of master.banks) {
+    for (const pfx of bank.prefixes) {
+      if (lcBase.startsWith(pfx.toUpperCase())) {
+        return bank.normalize || pfx;
+      }
+    }
+  }
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION: PKCE OAuth
+// ══════════════════════════════════════════════════════════════
+const CLIENT_ID    = 'f071a165-5e9b-44bf-b6a1-baba654524db';
+const TENANT_ID    = 'a56988ff-c2b8-4df8-9727-889ad4205198';
+const REDIRECT_URI = 'https://mhlee205.github.io/LC_FD_CHECKER/compass_si_debug.html';
+const SCOPE_DV     = 'https://orgde512c6f.crm7.dynamics.com/user_impersonation offline_access';
+const DV_API       = 'https://orgde512c6f.crm7.dynamics.com/api/data/v9.2';
+
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function sha256(str) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+}
+function randomStr(n) {
+  const arr = new Uint8Array(n);
+  crypto.getRandomValues(arr);
+  return b64url(arr).slice(0, n);
+}
+
+let dvToken = null;
+let tokenExpiry = 0;
+function isTokenValid() { return dvToken && Date.now() < tokenExpiry; }
+
+async function startLogin() {
+  const verifier  = randomStr(64);
+  const challenge = b64url(await sha256(verifier));
+  const state     = randomStr(16);
+  sessionStorage.setItem('pkce_v', verifier);
+  sessionStorage.setItem('pkce_s', state);
+  const params = new URLSearchParams({
+    client_id:CLIENT_ID, response_type:'code', redirect_uri:REDIRECT_URI,
+    scope:SCOPE_DV, state, code_challenge:challenge,
+    code_challenge_method:'S256', prompt:'select_account',
+  });
+  location.href = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${params}`;
+}
+
+async function handleCallback() {
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('code');
+  const state  = params.get('state');
+  if (!code) return false;
+  if (state !== sessionStorage.getItem('pkce_s')) { alert('State mismatch'); return false; }
+  const verifier = sessionStorage.getItem('pkce_v');
+  const res = await fetch(
+    `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`,
+    { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        client_id:CLIENT_ID, grant_type:'authorization_code', code,
+        redirect_uri:REDIRECT_URI, code_verifier:verifier, scope:SCOPE_DV,
+      }),
+    }
+  );
+  const data = await res.json();
+  if (data.error) { alert('Token取得エラー: '+(data.error_description||data.error)); return false; }
+  dvToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  sessionStorage.removeItem('pkce_v');
+  sessionStorage.removeItem('pkce_s');
+  history.replaceState({}, '', REDIRECT_URI);
+  return true;
+}
+
+function doLogout() { dvToken=null; tokenExpiry=0; updateLoginUI(false); }
+
+function updateLoginUI(ok) {
+  document.getElementById('loginStatus').innerHTML = ok
+    ? '<span class="badge-ok">✅ ログイン済み</span>'
+    : '<span class="badge-ng">⬜ 未ログイン</span>';
+  document.getElementById('loginBtn').style.display  = ok ? 'none' : '';
+  document.getElementById('logoutBtn').style.display = ok ? ''     : 'none';
+}
+
+async function dvGet(path) {
+  const res = await fetch(`${DV_API}/${path}`, {
+    headers: {
+      'Authorization':`Bearer ${dvToken}`,
+      'OData-MaxVersion':'4.0', 'OData-Version':'4.0',
+      'Accept':'application/json',
+      'Prefer':'odata.include-annotations="OData.Community.Display.V1.FormattedValue"',
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error(`API Error ${res.status}: ${err?.error?.message||res.statusText}`);
+  }
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════════════
+// SECTION: PAGE INIT
+// ══════════════════════════════════════════════════════════════
+(async () => {
+  if (new URLSearchParams(location.search).get('code')) {
+    updateLoginUI(await handleCallback());
+  } else {
+    updateLoginUI(isTokenValid());
+  }
+})();
+
+// ══════════════════════════════════════════════════════════════
+// SECTION: SEARCH
+// ══════════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderSiMini(si, buyerCode) {
+  const siNo  = si.crcf9_sino ?? '—';
+  const pay   = si.crcf9_payment_classification ?? '—';
+  const lc    = si.cr49f_lc_no ?? '—';
+  const bg    = detectBankGroup(lc, buyerCode);
+  const badge = bg ? `<span class="badge-ok">${esc(bg)}</span>` : '<span class="badge-warn">未分類</span>';
+  return `<div class="si-card">
+    <div class="field-row"><span class="field-label">SI No</span><span class="field-value"><strong>${esc(siNo)}</strong></span></div>
+    <div class="field-row"><span class="field-label">Payment</span><span class="field-value">${esc(pay)}</span></div>
+    <div class="field-row"><span class="field-label">LC No (SI)</span><span class="field-value">${esc(lc)}</span></div>
+    <div class="field-row"><span class="field-label">Bank Group</span><span class="field-value">${badge}</span></div>
+  </div>`;
+}
+
+function renderSiFull(si, buyerCode, targetBg) {
+  const siNo    = si.crcf9_sino ?? '—';
+  const pay     = si.crcf9_payment_classification ?? '—';
+  const lc      = si.cr49f_lc_no ?? '—';
+  const bg      = detectBankGroup(lc, buyerCode);
+  const created = si.createdon ? new Date(si.createdon).toLocaleString('ja-JP') : '—';
+  const scGuid  = si._cr49f_sale_contract_id_value ?? '—';
+  const matchBadge = (bg && bg === targetBg)
+    ? '<span class="badge-ok">✅ MATCH</span>'
+    : '<span class="badge-warn">⚠ 銀行不一致</span>';
+  return `<div class="si-card">
+    <div class="field-row"><span class="field-label">SI No</span><span class="field-value"><strong>${esc(siNo)}</strong> ${matchBadge}</span></div>
+    <div class="field-row"><span class="field-label">Payment</span><span class="field-value">${esc(pay)}</span></div>
+    <div class="field-row"><span class="field-label">LC No (SI)</span><span class="field-value">${esc(lc)}</span></div>
+    <div class="field-row"><span class="field-label">Bank Group</span><span class="field-value"><span class="badge-ok">${esc(bg ?? '—')}</span></span></div>
+    <div class="field-row"><span class="field-label">Created</span><span class="field-value">${esc(created)}</span></div>
+    <div class="field-row"><span class="field-label">SC GUID</span><span class="field-value" style="font-family:monospace;font-size:.65rem;">${esc(scGuid)}</span></div>
+  </div>`;
+}
+
+async function runSearch() {
+  if (!isTokenValid()) { alert('先にCOMPASSにログインしてください'); return; }
+  const scNo = document.getElementById('scNoInput').value.trim();
+  const lcNo = document.getElementById('lcNoInput').value.trim();
+  if (!scNo) { alert('計約番号（SC No）を入力してください'); return; }
+
+  document.getElementById('resultsArea').style.display = '';
+  const loading = '<span class="empty-msg">Loading...</span>';
+  ['stepAResult','stepBResult','stepCResult','stepDResult'].forEach(id => {
+    document.getElementById(id).innerHTML = loading;
+  });
+  document.getElementById('stepBUrl').textContent = '';
+
+  // Step A
+  const buyerCode = extractBuyerCode(scNo);
+  const bankGroup = lcNo ? detectBankGroup(lcNo, buyerCode) : null;
+  const buyerInfo = buyerCode ? (BUYER_BANK_MASTER[buyerCode]?.name ?? '不明') : null;
+
+  let aHtml = '';
+  aHtml += `<div class="field-row"><span class="field-label">Buyer Code</span><span class="field-value">`;
+  aHtml += buyerCode
+    ? `<span class="badge-ok">${esc(buyerCode)}</span>&nbsp;${esc(buyerInfo)}`
+    : `<span class="badge-ng">抽出失敗 — LRS-YYYYXXN 形式を確認</span>`;
+  aHtml += `</span></div>`;
+  if (lcNo) {
+    aHtml += `<div class="field-row"><span class="field-label">LC No (入力)</span><span class="field-value">${esc(lcNo)}</span></div>`;
+    aHtml += `<div class="field-row"><span class="field-label">Bank Group</span><span class="field-value">`;
+    aHtml += bankGroup
+      ? `<span class="badge-ok">${esc(bankGroup)}</span>`
+      : `<span class="badge-warn">未検出 — このLCはマスター未登録の可能性あり</span>`;
+    aHtml += `</span></div>`;
+  }
+  document.getElementById('stepAResult').innerHTML = aHtml;
+
+  try {
+    // Step B — cr49f_sale_contracts
+    const bPath = `cr49f_sale_contracts?$filter=cr49f_sale_contract_no eq '${scNo}'&$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date,cr49f_lc_no`;
+    document.getElementById('stepBUrl').textContent = `${DV_API}/${bPath}`;
+    const bData = await dvGet(bPath);
+    const scList = bData.value || [];
+
+    if (scList.length === 0) {
+      document.getElementById('stepBResult').innerHTML = `<span class="badge-ng">❌ SC が見つかりませんでした (${esc(scNo)})</span>`;
+      document.getElementById('stepCResult').innerHTML = `<span class="empty-msg">—</span>`;
+      document.getElementById('stepDResult').innerHTML = `<span class="empty-msg">—</span>`;
+      return;
+    }
+
+    let bHtml = `<div class="count-badge">${scList.length}件 取得</div>`;
+    scList.forEach(sc => {
+      bHtml += `<div class="si-card">
+        <div class="field-row"><span class="field-label">SC No</span><span class="field-value"><strong>${esc(sc.cr49f_sale_contract_no ?? '—')}</strong></span></div>
+        <div class="field-row"><span class="field-label">Contract Date</span><span class="field-value">${esc(sc.cr49f_sale_contract_date ?? '—')}</span></div>
+        <div class="field-row"><span class="field-label">LC No (SC)</span><span class="field-value">${esc(sc.cr49f_lc_no ?? '—')}</span></div>
+        <div class="field-row"><span class="field-label">SC GUID</span><span class="field-value" style="font-family:monospace;font-size:.65rem;">${esc(sc.cr49f_sale_contractid ?? '—')}</span></div>
+      </div>`;
+    });
+    document.getElementById('stepBResult').innerHTML = bHtml;
+
+    // Step C — cr49f_s_is (Promise.all — no IN operator)
+    const siArrays = await Promise.all(
+      scList.map(sc => {
+        const guid = sc.cr49f_sale_contractid;
+        const cPath = `cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${guid}&$select=crcf9_sino,crcf9_payment_classification,cr49f_lc_no,createdon,_cr49f_sale_contract_id_value&$orderby=crcf9_sino asc`;
+        return dvGet(cPath).then(d => d.value || []).catch(() => []);
+      })
+    );
+    const allSi = siArrays.flat();
+
+    if (allSi.length === 0) {
+      document.getElementById('stepCResult').innerHTML = `<span class="badge-warn">⚠ SI レコードが見つかりませんでした</span>`;
+      document.getElementById('stepDResult').innerHTML = `<span class="empty-msg">—</span>`;
+      return;
+    }
+
+    let cHtml = `<div class="count-badge">${allSi.length}件 取得 (全SC合計)</div>`;
+    allSi.forEach(si => { cHtml += renderSiMini(si, buyerCode); });
+    document.getElementById('stepCResult').innerHTML = cHtml;
+
+    // Step D — bank filter, max 3
+    const filtered = bankGroup
+      ? allSi.filter(si => detectBankGroup(si.cr49f_lc_no, buyerCode) === bankGroup)
+      : allSi;
+    const final3 = filtered.slice(0, 3);
+
+    if (final3.length === 0) {
+      document.getElementById('stepDResult').innerHTML = `<span class="badge-warn">⚠ 銀行グループ「${esc(bankGroup)}」に一致するSIが見つかりませんでした</span>`;
+      return;
+    }
+
+    let dHtml = `<div class="count-badge">`;
+    dHtml += bankGroup
+      ? `銀行グループ「<strong>${esc(bankGroup)}</strong>」一致: ${filtered.length}件 → 最大3件表示`
+      : `全SI表示 (LC未入力のため銀行フィルターなし): ${filtered.length}件 → 最大3件表示`;
+    dHtml += `</div>`;
+    final3.forEach(si => { dHtml += renderSiFull(si, buyerCode, bankGroup); });
+    document.getElementById('stepDResult').innerHTML = dHtml;
+
+  } catch(e) {
+    const errMsg = `<span class="badge-ng">❌ エラー: ${esc(e.message)}</span>`;
+    ['stepBResult','stepCResult','stepDResult'].forEach(id => {
+      if (document.getElementById(id).innerHTML.includes('Loading')) {
+        document.getElementById(id).innerHTML = errMsg;
+      }
+    });
+  }
+}
+</script>
+
+</body>
+</html>
