@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.12 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.13 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -235,13 +235,20 @@ select.fi{cursor:pointer;height:34px;}
 .apply-all-btn{width:100%;margin-top:8px;background:rgba(13,148,136,.12);border:1px solid rgba(13,148,136,.35);border-radius:7px;color:var(--teal);font-size:.72rem;font-weight:700;padding:7px 4px;cursor:pointer;transition:all .2s;}
 .apply-all-btn:hover{background:rgba(13,148,136,.25);}
 .comp-dv-banner{background:var(--surface2);border:1px solid rgba(13,148,136,.25);border-radius:8px;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.7rem;flex-wrap:wrap;}
+/* ── 인라인 힌트 (Phase4) ── */
+.fi-past-hint{font-size:.62rem;margin-top:3px;padding:3px 7px;border-radius:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;line-height:1.4;}
+.fi-past-ok{color:var(--ok);background:rgba(34,197,94,.07);}
+.fi-past-ng{color:var(--warn);background:rgba(245,158,11,.07);}
+.fi-past-ng-val{flex:1;color:var(--sub);white-space:pre-wrap;word-break:break-all;font-size:.61rem;}
+.past-apply-inline{background:rgba(13,148,136,.18);border:1px solid rgba(13,148,136,.35);border-radius:4px;color:var(--teal);font-size:.6rem;padding:1px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;}
+.past-apply-inline:hover{background:rgba(13,148,136,.32);}
 </style>
 </head>
 <body>
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.12 (2026-06-10) | DV 콜백 후 loginGate 닫기 수정</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.13 (2026-06-10) | 인라인힌트 + diff 하이라이트 + 자신제외</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -250,7 +257,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.12 (2026-06-10) | DV 콜백 후 loginGate 닫기 수정</span>
+  <span>LEENEAR CORPORATION — v2.13 (2026-06-10) | 인라인힌트 + diff 하이라이트 + 자신제외</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -993,6 +1000,7 @@ async function fetchPastSIs(contractNo, lcNo) {
       if(f.length > 0) filtered = f;
     }
 
+    filtered = filtered.filter(si => si._sc_no !== contractNo);
     filtered.sort((a,b) => new Date(b.createdon) - new Date(a.createdon));
     return filtered.slice(0,3);
 
@@ -3186,65 +3194,84 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
   if(!pastSIs || pastSIs.length === 0) {
     statusEl.textContent = dvTokenValid() ? '該当なし' : '未ログイン';
     bankEl.textContent   = '';
-    contentEl.innerHTML  = `<div class="empty" style="font-size:.7rem;">${
-      dvTokenValid()
+    contentEl.innerHTML  = `<div class="empty" style="font-size:.7rem;">
+      ${dvTokenValid()
         ? '過去SIが見つかりませんでした'
-        : '<button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.7rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>'
-    }</div>`;
+        : '<button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.7rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>'}
+    </div>`;
     return;
   }
 
   statusEl.textContent = `✅ ${pastSIs.length}件取得済`;
-  bankEl.textContent   = bankGroup ? `Buyer: ${buyerCode||'—'} × Bank: ${bankGroup}` : `Buyer: ${buyerCode||'—'}`;
+  bankEl.textContent   = bankGroup
+    ? `Buyer: ${buyerCode||'—'} × Bank: ${bankGroup}`
+    : `Buyer: ${buyerCode||'—'}`;
 
-  const APPLY_FIELDS = [
-    {key:'crcf9_consignee',    label:'Consignee',    siKey:'consignee'},
-    {key:'crcf9_notify_party', label:'Notify Party', siKey:'notifyParty'},
-    {key:'crcf9_address',      label:'Address',      siKey:'address'},
-    {key:'crcf9_tel',          label:'TEL',          siKey:'tel'},
-    {key:'crcf9_fax',          label:'FAX',          siKey:'fax'},
-    {key:'crcf9_bl_text1',     label:'BL Text1',     siKey:'blText1'},
-  ];
-  const REF_ONLY_FIELDS = [
-    {key:'crcf9_payment_deadline',    label:'支払期限(参照)'},
-    {key:'cr49f_payment_terms',       label:'支払条件(参照)'},
-    {key:'crcf9_place_of_delivery_1', label:'POD1(参照)'},
-    {key:'crcf9_all',                 label:'ALL(参照)'},
-    {key:'crcf9_invoicetext',         label:'InvText(参照)'},
+  const ALL_FIELDS = [
+    {dvKey:'crcf9_consignee',          siKey:'consignee',       label:'Consignee'},
+    {dvKey:'crcf9_notify_party',        siKey:'notifyParty',     label:'Notify Party'},
+    {dvKey:'crcf9_address',             siKey:'address',         label:'Address'},
+    {dvKey:'crcf9_tel',                 siKey:'tel',             label:'TEL'},
+    {dvKey:'crcf9_fax',                 siKey:'fax',             label:'FAX'},
+    {dvKey:'crcf9_payment_deadline',    siKey:'paymentDeadline', label:'支払期限'},
+    {dvKey:'cr49f_payment_terms',       siKey:'paymentTerms',    label:'支払条件'},
+    {dvKey:'crcf9_place_of_delivery_1', siKey:'pod1',            label:'POD1'},
+    {dvKey:'crcf9_bl_text1',            siKey:'blText1',         label:'BL Text1'},
+    {dvKey:'crcf9_all',                 siKey:'all',             label:'ALL'},
+    {dvKey:'crcf9_invoicetext',         siKey:'invoiceText',     label:'InvoiceText'},
+    {dvKey:'crcf9_bencert_text',        siKey:'beneText',        label:'BeneCert'},
+    {dvKey:'crcf9_shipping_mark',       siKey:'shippingMark',    label:'ShippingMark'},
+    {dvKey:'crcf9_remark',              siKey:'remark',          label:'Remark'},
   ];
 
   function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-  function trunc(s,n=120){const t=String(s||'');return t.length>n?t.slice(0,n)+'…':t;}
+  function _trunc(s,n=100){const t=String(s||'');return t.length>n?t.slice(0,n)+'…':t;}
 
   let html = '';
   pastSIs.forEach((si, idx) => {
-    const scNo    = si._sc_no||'—';
-    const lcNo    = si.cr49f_lc_no||'—';
-    const created = si.createdon?si.createdon.slice(0,10):'—';
+    const scNo    = si._sc_no || '—';
+    const lcNo    = si.cr49f_lc_no || '—';
+    const created = si.createdon ? si.createdon.slice(0,10) : '—';
+    const curVals = (compVnMode && compVnTab === 2) ? siVals2 : siVals;
+    const sfxCur  = (compVnMode && compVnTab === 2) ? '2' : '1';
 
     html += `<div class="past-si-card">`;
-    html += `<div class="past-si-card-title">[SI #${idx+1}] ${_esc(scNo)} <span style="font-weight:400;color:var(--sub);font-size:.65rem;">${_esc(created)}</span></div>`;
-    html += `<div style="font-size:.65rem;color:var(--sub2);margin-bottom:6px;">${_esc(trunc(lcNo,50))}</div>`;
+    html += `<div class="past-si-card-title">[SI #${idx+1}] ${_esc(scNo)}
+      <span style="font-weight:400;color:var(--sub);font-size:.65rem;">${_esc(created)}</span>
+    </div>`;
+    html += `<div style="font-size:.65rem;color:var(--sub2);margin-bottom:8px;word-break:break-all;">${_esc(_trunc(lcNo,60))}</div>`;
 
-    APPLY_FIELDS.forEach(f => {
-      const val = si[f.key];
-      if(!val) return;
-      html += `<div class="past-si-field">
-        <span class="past-si-label">${_esc(f.label)}</span>
-        <span class="past-si-val">${_esc(trunc(val,80))}</span>
-        <button class="apply-btn" onclick="applySiField('${f.siKey}',${JSON.stringify(val)})">→適用</button>
-      </div>`;
+    let diffCount = 0;
+    ALL_FIELDS.forEach(f => {
+      const pastVal = si[f.dvKey];
+      if(!pastVal) return;
+      const curVal  = String(curVals?.[f.siKey] || '').trim();
+      const pastStr = String(pastVal).trim();
+      const isSame  = curVal === pastStr;
+      if(!isSame) diffCount++;
+
+      if(isSame) {
+        html += `<div class="past-si-field">
+          <span class="past-si-label">${_esc(f.label)}</span>
+          <span style="color:var(--ok);font-size:.65rem;">✅</span>
+        </div>`;
+      } else {
+        html += `<div class="past-si-field" style="flex-direction:column;align-items:flex-start;gap:3px;">
+          <div style="display:flex;align-items:center;gap:6px;width:100%;">
+            <span class="past-si-label">${_esc(f.label)}</span>
+            <span style="color:var(--warn);font-size:.63rem;flex-shrink:0;">⚠️ 異なる</span>
+            <button class="apply-btn" style="margin-left:auto;" onclick="applySiField('${f.siKey}','${sfxCur}',${JSON.stringify(pastVal)})">→ 適用</button>
+          </div>
+          <div style="font-size:.63rem;color:var(--sub);padding-left:96px;white-space:pre-wrap;word-break:break-all;">${_esc(_trunc(pastStr,100))}</div>
+        </div>`;
+      }
     });
 
-    REF_ONLY_FIELDS.forEach(f => {
-      const val = si[f.key];
-      if(!val) return;
-      html += `<div class="past-si-field">
-        <span class="past-si-label" style="color:var(--sub2);">${_esc(f.label)}</span>
-        <span class="past-si-val" style="color:var(--sub);">${_esc(trunc(val,80))}</span>
-      </div>`;
-    });
-
+    html += `<div style="font-size:.63rem;color:var(--sub2);margin-top:6px;margin-bottom:4px;">
+      ${diffCount > 0
+        ? `<span style="color:var(--warn);">⚠️ ${diffCount}件異なる</span>`
+        : `<span style="color:var(--ok);">✅ 全て一致</span>`}
+    </div>`;
     html += `<button class="apply-all-btn" onclick="applyAllSiFields(${idx})">✨ このSIをすべて適用</button>`;
     html += `</div>`;
   });
@@ -3252,12 +3279,17 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
   contentEl.innerHTML = html;
 }
 
-function applySiField(siKey, value) {
-  if(!siVals) return;
-  siVals[siKey] = value;
+function applySiField(siKey, sfx, value) {
+  // 하위호환: 인수 2개 호출 대응
+  if(typeof sfx !== 'string' || (sfx !== '1' && sfx !== '2')) {
+    value = sfx; sfx = '1';
+  }
+  const v = sfx === '2' ? siVals2 : siVals;
+  if(!v) return;
+  v[siKey] = value;
   renderCompFormContent();
   setTimeout(() => {
-    const el = document.getElementById(`cfi_${siKey}_1`);
+    const el = document.getElementById(`cfi_${siKey}_${sfx}`);
     if(el) { el.style.borderColor='var(--teal)'; setTimeout(()=>el.style.borderColor='',1500); }
   }, 100);
 }
@@ -3668,6 +3700,25 @@ function renderCompForm(){renderCompFormContent();}
 function renderCompFormContent(){
   const vals=compVnMode&&compVnTab===2?siVals2:siVals;
   const sfx=compVnMode&&compVnTab===2?'2':'1';
+  // ── 직전 SI 값 매핑 (인라인 힌트용)
+  const _psi = pastSIsData && pastSIsData[0] ? pastSIsData[0] : null;
+  const PAST_VAL_MAP = {
+    consignee:       _psi?.crcf9_consignee          ?? null,
+    notifyParty:     _psi?.crcf9_notify_party        ?? null,
+    address:         _psi?.crcf9_address             ?? null,
+    tel:             _psi?.crcf9_tel                 ?? null,
+    fax:             _psi?.crcf9_fax                 ?? null,
+    paymentDeadline: _psi?.crcf9_payment_deadline    ?? null,
+    paymentTerms:    _psi?.cr49f_payment_terms        ?? null,
+    pod1:            _psi?.crcf9_place_of_delivery_1  ?? null,
+    pod2:            _psi?.crcf9_place_of_delivery_2  ?? null,
+    blText1:         _psi?.crcf9_bl_text1             ?? null,
+    all:             _psi?.crcf9_all                  ?? null,
+    invoiceText:     _psi?.crcf9_invoicetext           ?? null,
+    beneText:        _psi?.crcf9_bencert_text          ?? null,
+    shippingMark:    _psi?.crcf9_shipping_mark         ?? null,
+    remark:          _psi?.crcf9_remark                ?? null,
+  };
   const lc=compLcData;
   const isSI1BLOnly=compVnMode&&compVnTab===1;
   const showInvBene=!isSI1BLOnly;
@@ -3682,21 +3733,21 @@ function renderCompFormContent(){
   html+=siFieldCard({id:'voNo',sfx,vals,label:'VO No',col:'crcf9_vo_no',type:'text',badge:'fb-man',hint:'VO番号（なければ空白）'});
   if(lc){html+=`<div class="si-field f-fix"><div class="si-fhdr"><span class="si-dot si-dot-grey"></span><div><div class="si-flabel">最終船積日（参照）<span class="si-fcol">参照のみ</span></div></div><span class="si-fbadge fb-fix">参照</span></div><div style="font-size:.73rem;color:var(--sub);padding:3px 2px;">📅 有効期限: <strong style="color:var(--warn)">${esc(lc.expiryDate||'-')}</strong> | ✈️ 最終船積: <strong style="color:var(--warn)">${esc(lc.latestShipment||'-')}</strong></div></div>`;}
   html+=siFieldCard({id:'portOfDischarge',sfx,vals,label:'Port Of Discharge（PODと異なる場合）',col:'crcf9_port_of_discharge',type:'text',badge:'fb-auto',hint:'LC44EのPort of DischargeとPort of Deliveryが異なる場合のみ。通常空白。'});
-  html+=siFieldCard({id:'pod1',sfx,vals,label:'1st POD ★',col:'crcf9_place_of_delivery_1',type:'text',badge:'fb-auto',required:true,hint:'主要揚荷港（例: CAT LAI PORT, VIETNAM）'});
-  html+=siFieldCard({id:'pod2',sfx,vals,label:'2nd POD',col:'crcf9_place_of_delivery_2',type:'text',badge:'fb-auto',hint:'複数港の2番目（なければ空白）'});
+  html+=siFieldCard({id:'pod1',sfx,vals,label:'1st POD ★',col:'crcf9_place_of_delivery_1',type:'text',badge:'fb-auto',required:true,hint:'主要揚荷港（例: CAT LAI PORT, VIETNAM）',pastVal:PAST_VAL_MAP['pod1']});
+  html+=siFieldCard({id:'pod2',sfx,vals,label:'2nd POD',col:'crcf9_place_of_delivery_2',type:'text',badge:'fb-auto',hint:'複数港の2番目（なければ空白）',pastVal:PAST_VAL_MAP['pod2']});
   html+=siFieldCard({id:'pod3',sfx,vals,label:'3rd POD',col:'crcf9_place_of_delivery_3',type:'text',badge:'fb-auto',hint:'複数港の3番目（なければ空白）'});
-  if(lc&&lc.country==='THAILAND')html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark ★★（タイ必須！）',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-req',required:true,hint:'⚠️ タイ向けは必須！'});
-  else html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-man',hint:'タイ向け以外は通常空白'});
-  html+=siFieldCard({id:'paymentDeadline',sfx,vals,label:'支払期限 ★★',col:'crcf9_payment_deadline',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'例) 90 DAYS AFTER B/L DATE FOR 100PCT OF INVOICE VALUE'});
-  html+=siFieldCard({id:'paymentTerms',sfx,vals,label:'支払条件（INCOTERMS）★',col:'cr49f_payment_terms',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'CIF [港名] (...) の形式のみ'});
+  if(lc&&lc.country==='THAILAND')html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark ★★（タイ必須！）',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-req',required:true,hint:'⚠️ タイ向けは必須！',pastVal:PAST_VAL_MAP['shippingMark']});
+  else html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-man',hint:'タイ向け以外は通常空白',pastVal:PAST_VAL_MAP['shippingMark']});
+  html+=siFieldCard({id:'paymentDeadline',sfx,vals,label:'支払期限 ★★',col:'crcf9_payment_deadline',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'例) 90 DAYS AFTER B/L DATE FOR 100PCT OF INVOICE VALUE',pastVal:PAST_VAL_MAP['paymentDeadline']});
+  html+=siFieldCard({id:'paymentTerms',sfx,vals,label:'支払条件（INCOTERMS）★',col:'cr49f_payment_terms',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'CIF [港名] (...) の形式のみ',pastVal:PAST_VAL_MAP['paymentTerms']});
 
   html+=siSecHdr('⬜','② 中央列 — COMPASS中央カラム');
   if(compIsLcMode||vals.lcNo)html+=siFieldCard({id:'lcNo',sfx,vals,label:'L/C No ★',col:'cr49f_lc_no',type:'text',badge:'fb-auto',required:compIsLcMode,hint:'形式: LC番号 DATED ON MMM DD, YYYY'});
-  html+=siFieldCard({id:'consignee',sfx,vals,label:'Consignee ★★',col:'crcf9_consignee',type:'textarea',rows:4,badge:'fb-auto',required:true,hint:isSI1BLOnly?'SI#1 BL用: TO ORDER OF [銀行名]':compVnMode?'SI#2 IV/PL用: [TAX CODE]#[GPMT番号]#DEPOSIT#[会社名]*':'銀行指示式（TO ORDER OF～）または記名式'});
-  html+=siFieldCard({id:'notifyParty',sfx,vals,label:'Notify Party ★★',col:'crcf9_notify_party',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:isSI1BLOnly?'SI#1: [TAX CODE]#[GPMT番号]#DEPOSIT':'会社名のみ'});
-  html+=siFieldCard({id:'address',sfx,vals,label:'Address',col:'crcf9_address',type:'textarea',rows:3,badge:'fb-auto',hint:isSI1BLOnly?'VN SI#1形式: #会社名(***=LocalAgent有)#住所#TEL番号#FAX番号#EMAIL':'Notify Partyの住所'});
-  html+=siFieldCard({id:'tel',sfx,vals,label:'TEL（Notify Party）',col:'crcf9_tel',type:'text',badge:'fb-auto',hint:isSI1BLOnly?'VN SI#1はAddressフィールドに含めるため通常空白':'例) TEL: +82-2-6182-0842'});
-  html+=siFieldCard({id:'fax',sfx,vals,label:'FAX（Notify Party）'+(lc&&lc.faxNoRequired?' ★':''),col:'crcf9_fax',type:'text',badge:'fb-auto',required:!!(lc&&lc.faxNoRequired),hint:lc&&lc.faxNoRequired?'⚠️ LC 46AにFAX要件あり — 必ず入力！':'例) FAX: +82-2-6182-0849'});
+  html+=siFieldCard({id:'consignee',sfx,vals,label:'Consignee ★★',col:'crcf9_consignee',type:'textarea',rows:4,badge:'fb-auto',required:true,hint:isSI1BLOnly?'SI#1 BL用: TO ORDER OF [銀行名]':compVnMode?'SI#2 IV/PL用: [TAX CODE]#[GPMT番号]#DEPOSIT#[会社名]*':'銀行指示式（TO ORDER OF～）または記名式',pastVal:PAST_VAL_MAP['consignee']});
+  html+=siFieldCard({id:'notifyParty',sfx,vals,label:'Notify Party ★★',col:'crcf9_notify_party',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:isSI1BLOnly?'SI#1: [TAX CODE]#[GPMT番号]#DEPOSIT':'会社名のみ',pastVal:PAST_VAL_MAP['notifyParty']});
+  html+=siFieldCard({id:'address',sfx,vals,label:'Address',col:'crcf9_address',type:'textarea',rows:3,badge:'fb-auto',hint:isSI1BLOnly?'VN SI#1形式: #会社名(***=LocalAgent有)#住所#TEL番号#FAX番号#EMAIL':'Notify Partyの住所',pastVal:PAST_VAL_MAP['address']});
+  html+=siFieldCard({id:'tel',sfx,vals,label:'TEL（Notify Party）',col:'crcf9_tel',type:'text',badge:'fb-auto',hint:isSI1BLOnly?'VN SI#1はAddressフィールドに含めるため通常空白':'例) TEL: +82-2-6182-0842',pastVal:PAST_VAL_MAP['tel']});
+  html+=siFieldCard({id:'fax',sfx,vals,label:'FAX（Notify Party）'+(lc&&lc.faxNoRequired?' ★':''),col:'crcf9_fax',type:'text',badge:'fb-auto',required:!!(lc&&lc.faxNoRequired),hint:lc&&lc.faxNoRequired?'⚠️ LC 46AにFAX要件あり — 必ず入力！':'例) FAX: +82-2-6182-0849',pastVal:PAST_VAL_MAP['fax']});
   html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;">
     <div style="font-size:.67rem;font-weight:700;color:var(--sub2);margin-bottom:7px;text-transform:uppercase;">🔒 Shipper情報（固定値）</div>`;
   html+=siFixedField('Shipper',SHIPPER_FIXED.shipper,'crcf9_shipper');
@@ -3710,19 +3761,19 @@ function renderCompFormContent(){
   html+=siFieldCard({id:'classification',sfx,vals,label:'条件区分 ★',col:'crcf9_payment_classification',type:'select',opts:['LC','TT','DP'],badge:'fb-auto'});
   html+=siFieldCard({id:'localAgent',sfx,vals,label:'LOCAL AGENT記載',col:'crcf9_local_agent_note',type:'select',opts:['False','True'],badge:'fb-auto',hint:'LC 46Aに現地代理店・SHIPPING AGENT要件があればTrue'});
   html+=`<div style="background:var(--surface2);border:1px solid rgba(96,165,250,.2);border-radius:8px;padding:10px 12px;margin-bottom:7px;"><div style="font-size:.67rem;font-weight:700;color:var(--info);margin-bottom:7px;">📋 B/L タブ</div>`;
-  html+=siFieldCard({id:'blText1',sfx,vals,label:'B/L text ①',col:'crcf9_bl_text1',type:'textarea',rows:compVnMode?3:2,badge:'fb-auto',hint:isSI1BLOnly?'VN形式: WASTE PAPER#HSCODE#XXKGS#XXBALES↵DEPOSIT NUMBER: XXX':'PO番号等の特殊記載（不要なら空白）'});
+  html+=siFieldCard({id:'blText1',sfx,vals,label:'B/L text ①',col:'crcf9_bl_text1',type:'textarea',rows:compVnMode?3:2,badge:'fb-auto',hint:isSI1BLOnly?'VN形式: WASTE PAPER#HSCODE#XXKGS#XXBALES↵DEPOSIT NUMBER: XXX':'PO番号等の特殊記載（不要なら空白）',pastVal:PAST_VAL_MAP['blText1']});
   if(compVnMode&&compVnTab===2)html+=siFieldCard({id:'blText2',sfx,vals,label:'B/L text ②（VN SI#2用）',col:'crcf9_bl_text2',type:'textarea',rows:2,badge:'fb-auto',hint:'VN SI#2: *#住所#TEL#FAX'});
   html+=`</div>`;
   if(showInvBene){
     html+=`<div style="background:var(--surface2);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:10px 12px;margin-bottom:7px;"><div style="font-size:.67rem;font-weight:700;color:var(--purple);margin-bottom:7px;">📄 IV / PL Cert タブ</div>`;
-    html+=siFieldCard({id:'invoiceText',sfx,vals,label:'Invoice 専用文句',col:'crcf9_invoicetext',type:'textarea',rows:3,badge:'fb-auto',hint:'47AのInvoiceのみへの記載要件 + 45AのSpecification詳細'});
+    html+=siFieldCard({id:'invoiceText',sfx,vals,label:'Invoice 専用文句',col:'crcf9_invoicetext',type:'textarea',rows:3,badge:'fb-auto',hint:'47AのInvoiceのみへの記載要件 + 45AのSpecification詳細',pastVal:PAST_VAL_MAP['invoiceText']});
     html+=`</div>`;
-    if(lc&&lc.beneCertRequired){html+=`<div style="background:var(--surface2);border:1px solid rgba(96,165,250,.2);border-radius:8px;padding:10px 12px;margin-bottom:7px;"><div style="font-size:.67rem;font-weight:700;color:var(--info);margin-bottom:7px;">📃 Bene Cert タブ</div>`;html+=siFieldCard({id:'beneText',sfx,vals,label:'Bene Cert 文句 ★',col:'crcf9_bencert_text',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'47AのBENEFICIARY CERTIFICATE要求文句'});html+=`</div>`;}
+    if(lc&&lc.beneCertRequired){html+=`<div style="background:var(--surface2);border:1px solid rgba(96,165,250,.2);border-radius:8px;padding:10px 12px;margin-bottom:7px;"><div style="font-size:.67rem;font-weight:700;color:var(--info);margin-bottom:7px;">📃 Bene Cert タブ</div>`;html+=siFieldCard({id:'beneText',sfx,vals,label:'Bene Cert 文句 ★',col:'crcf9_bencert_text',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'47AのBENEFICIARY CERTIFICATE要求文句',pastVal:PAST_VAL_MAP['beneText']});html+=`</div>`;}
   }else{html+=`<div class="si-field f-fix" style="opacity:.5;"><div style="font-size:.69rem;color:var(--sub2);">📄 IV/PL Cert・Bene Cert タブの入力は <strong>SI#2</strong> で行ってください</div></div>`;}
   html+=`<div style="background:var(--surface2);border:1px solid rgba(34,197,94,.15);border-radius:8px;padding:10px 12px;margin-bottom:7px;"><div style="font-size:.67rem;font-weight:700;color:var(--ok);margin-bottom:7px;">📋 ALL（全書類共通）</div>`;
-  html+=siFieldCard({id:'all',sfx,vals,label:'全書類 共通文句（ALL）',col:'crcf9_all',type:'textarea',rows:3,badge:'fb-auto',hint:'47AからIMPORT LICENCE / TAX ID / LC番号・発行日 / HS CODE等、全書類への共通記載要件'});
+  html+=siFieldCard({id:'all',sfx,vals,label:'全書類 共通文句（ALL）',col:'crcf9_all',type:'textarea',rows:3,badge:'fb-auto',hint:'47AからIMPORT LICENCE / TAX ID / LC番号・発行日 / HS CODE等、全書類への共通記載要件',pastVal:PAST_VAL_MAP['all']});
   html+=`</div>`;
-  html+=siFieldCard({id:'remark',sfx,vals,label:'備考（Remark）',col:'crcf9_remark',type:'textarea',rows:2,badge:'fb-man',hint:'その他備考'});
+  html+=siFieldCard({id:'remark',sfx,vals,label:'備考（Remark）',col:'crcf9_remark',type:'textarea',rows:2,badge:'fb-man',hint:'その他備考',pastVal:PAST_VAL_MAP['remark']});
 
   html+=siSecHdr('📦','④ 商品詳細 ← 45A（販売詳細ID行）');
   html+=`<div class="alert alert-info" style="margin-bottom:8px;">💡 crcf9_s_i_detail に入力する商品情報です。</div>`;
@@ -3761,7 +3812,23 @@ function renderCompFormContent(){
 /* ============================================================
    SECTION: SI_COMPASS — Field card builders
 ============================================================ */
-function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required}){
+// ── 인라인 힌트 생성 (직전 SI와 현재값 비교)
+function buildPastHint(id, sfx, currentVal, pastVal) {
+  if(pastVal == null || pastVal === '') return '';
+  const cur  = String(currentVal || '').trim();
+  const past = String(pastVal).trim();
+  if(cur === past) {
+    return `<div class="fi-past-hint fi-past-ok">✅ 直前SI: 同じ</div>`;
+  }
+  const preview = past.length > 80 ? past.slice(0, 80) + '…' : past;
+  return `<div class="fi-past-hint fi-past-ng">
+    <span style="flex-shrink:0;">⚠️ 直前SI:</span>
+    <span class="fi-past-ng-val">${esc(preview)}</span>
+    <button class="past-apply-inline" onclick="applySiField('${id}','${sfx}',${JSON.stringify(pastVal)})">→ 適用</button>
+  </div>`;
+}
+
+function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required,pastVal}){
   const val=String(vals[id]||'');const hasVal=val.trim()!=='';
   let dotCls=hasVal?'si-dot-ok':(required?'si-dot-ng':'si-dot-grey');
   if(!hasVal&&badge==='fb-ai')dotCls='si-dot-warn';
@@ -3780,6 +3847,7 @@ function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required})
     ${inputHtml}
     <div class="copy-row"><button class="copy-btn" id="cc_${id}_${sfx}" onclick="copyCompField('${id}','${sfx}')">📋 コピー</button></div>
     ${hint?`<div class="fi-hint">💡 ${esc(hint)}</div>`:''}
+    ${(pastVal!=null&&pastVal!=='')?buildPastHint(id,sfx,val,pastVal):''}
   </div>`;
 }
 function siFixedField(label,val,col){
