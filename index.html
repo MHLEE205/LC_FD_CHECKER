@@ -1450,7 +1450,7 @@ async function extractPdfText(file){
     // 실제 텍스트 내용이 100자 이상일 때만 텍스트 모드 (페이지 헤더는 제외)
     return actualContent.trim().length>100?text.trim():null;
   }catch(e){
-    console.warn('PDF텍스트추출실패, 이미지모드로전환:',e);
+    console.warn('PDFテキスト抽出실패, イメージモードに切替:',e);
     return null;
   }
 }
@@ -1461,7 +1461,7 @@ async function fileToContent(f){
     const text=await extractPdfText(f);
     if(text){
       // 텍스트 추출 성공 → 텍스트로 전달 (오독 없음)
-      return {type:'text',text:`=== ${f.name} (PDF텍스트추출) ===\n${text}`};
+      return {type:'text',text:`=== ${f.name} (PDFテキスト抽出) ===\n${text}`};
     }
     // 텍스트 추출 실패(스캔 PDF) → base64 이미지로 전달
     const d=await b64(f);
@@ -1978,9 +1978,9 @@ RULE-12 BL Original通数: LC要求通数（2/3等）が充足されればどの
 RULE-13 Seal番号スペース: Seal番号のスペース有無の差異は同一番号として認定→OK。数字自体が異なる場合のみNG。
 RULE-14 コンテナ順序: ACLとPL/BLのコンテナ番号の並び順が異なってもOK。番号リストが全一致すればOK。
 RULE-15 ALL DOCUMENTS範囲: 47A「ALL DOCUMENTS」条件はINVOICE/PL/BL/保険/C/O/BENE CERT全て例外なく適用。47AにLC番号記載要求がある場合はBENE CERTも含む全書類のLC番号を個別確認。1書類でも未記載・不一致→NG。
-${isDDT_fd?'RULE-10 DDT거래: Shipper≠LEENEAR OK / Consignee=Buyer直接 OK / Notify Party=DDT関連社 OK':''}
-${isCLC_fd?'RULE-10 CLC거래: Shipper=実運送人(YAMAHATSU等) OK / LEENEARがShipperでなくてもOK':''}
-${isUC_fd?'RULE-10 SWB거래: Originalの通数チェックをスキップ / BL種類の不一致はOK':''}
+${isDDT_fd?'RULE-10 DDT取引: Shipper≠LEENEAR OK / Consignee=Buyer直接 OK / Notify Party=DDT関連社 OK':''}
+${isCLC_fd?'RULE-10 CLC取引: Shipper=実運送人(YAMAHATSU等) OK / LEENEARがShipperでなくてもOK':''}
+${isUC_fd?'RULE-10 SWB取引: Originalの通数チェックをスキップ / BL種類の不一致はOK':''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
   document.getElementById('fdBtn').disabled=true;
@@ -2732,9 +2732,9 @@ RULE-11 Port地名包含: LC地名がBL記載に含まれていればOK。詳細
 RULE-12 BL Original通数: 要求通数充足ならどのOriginalでもOK。
 RULE-13 Seal番号スペース: スペース有無の差異はOK。数字が異なる場合のみNG。
 RULE-14 コンテナ順序: 番号リストが全一致すれば順序差異はOK。
-${isDDT_bl?'RULE-10 DDT거래: Shipper≠LEENEAR OK / Consignee=Buyer直接 OK / Notify Party=DDT関連社 OK':''}
-${isCLC_bl?'RULE-10 CLC거래: Shipper=実運送人 OK':''}
-${isUC_bl?'RULE-10 SWB거래: Original通数チェックスキップ / BL種類不一致OK':''}
+${isDDT_bl?'RULE-10 DDT取引: Shipper≠LEENEAR OK / Consignee=Buyer直接 OK / Notify Party=DDT関連社 OK':''}
+${isCLC_bl?'RULE-10 CLC取引: Shipper=実運送人 OK':''}
+${isUC_bl?'RULE-10 SWB取引: Original通数チェックスキップ / BL種類不一致OK':''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     const prompt=isTtMode?
