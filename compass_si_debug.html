@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>COMPASS SI Debug Tool v1.0 — LEENEAR</title>
+<title>COMPASS SI Debug Tool v1.1 — LEENEAR</title>
 <style>
 :root{
   --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#1f2b40;
@@ -51,7 +51,7 @@ input::placeholder{color:var(--sub2);}
 <body>
 
 <h1>🔍 COMPASS SI Debug Tool</h1>
-<div class="ver" id="header-sub">LEENEAR CORPORATION — v1.0 (2026-06-10) | COMPASS SI Dataverse 검증 툴</div>
+<div class="ver" id="header-sub">LEENEAR CORPORATION — v1.1 (2026-06-10) | Step E: s_i_detail $expand 검증 추가</div>
 
 <!-- ① 로그인 -->
 <div class="step-card">
@@ -96,11 +96,19 @@ input::placeholder{color:var(--sub2);}
     <div class="step-title">Step D — 은행 필터 후 최종 결과 (Max 3건)</div>
     <div id="stepDResult"></div>
   </div>
+  <div class="step-card">
+    <div class="step-title">Step E — crcf9_s_i_detail $expand 검증</div>
+    <div style="font-size:.72rem;color:var(--sub);margin-bottom:8px;">
+      Step D의 SI #1 GUIDを使って $expand で商品明細を取得。navigation property名のテスト。
+    </div>
+    <div id="stepEUrl" class="url-box" style="margin-bottom:8px;"></div>
+    <div id="stepEResult"></div>
+  </div>
 </div>
 
 <div style="text-align:center;font-size:.65rem;color:var(--sub);margin-top:30px;padding-top:14px;border-top:1px solid var(--border);">
   ✦ Powered by LEENAI Automation System<br>
-  COMPASS SI Debug Tool v1.0 | LEENEAR CORPORATION
+  COMPASS SI Debug Tool v1.1 | LEENEAR CORPORATION
 </div>
 
 <script>
@@ -400,6 +408,96 @@ async function runSearch() {
     dHtml += `</div>`;
     final3.forEach(si => { dHtml += renderSiFull(si, buyerCode, bankGroup); });
     document.getElementById('stepDResult').innerHTML = dHtml;
+
+    // ─── Step E: s_i_detail $expand 검증
+    const eResultEl = document.getElementById('stepEResult');
+    const eUrlEl    = document.getElementById('stepEUrl');
+
+    if(final3.length === 0) {
+      eResultEl.innerHTML = '<span class="badge-warn">Step D 결과 없음 — 스킵</span>';
+    } else {
+      eResultEl.innerHTML = '<span class="empty-msg">取得中...</span>';
+      const siGuid = final3[0].cr49f_s_iid;
+
+      if(!siGuid) {
+        eResultEl.innerHTML = '<span class="badge-ng">SI GUID 없음</span>';
+      } else {
+
+        // 試行1: $expand with nested $select (navigation: crcf9_s_i_detail_crcf9_s_i)
+        const q1 = `cr49f_s_is(${siGuid})?$select=cr49f_s_iid,cr49f_lc_no` +
+                   `&$expand=crcf9_s_i_detail_crcf9_s_i($select=crcf9_productname,crcf9_weight,crcf9_price,crcf9_hs_code)`;
+        eUrlEl.textContent = `[試行1] GET ${DV_API}/${q1}`;
+
+        const detailTable = (rows) => rows.length === 0
+          ? '<span class="badge-warn">0件</span>'
+          : `<table style="width:100%;border-collapse:collapse;font-size:.7rem;">
+              <thead><tr style="color:var(--sub);border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:4px;">商品名</th>
+                <th style="text-align:left;padding:4px;">数量(MT)</th>
+                <th style="text-align:left;padding:4px;">単価</th>
+                <th style="text-align:left;padding:4px;">HS Code</th>
+              </tr></thead><tbody>
+              ${rows.map(d=>`<tr style="border-bottom:1px solid var(--border2);">
+                <td style="padding:4px;">${esc(d.crcf9_productname||'—')}</td>
+                <td style="padding:4px;">${esc(String(d.crcf9_weight||'—'))}</td>
+                <td style="padding:4px;">${esc(String(d.crcf9_price||'—'))}</td>
+                <td style="padding:4px;">${esc(d.crcf9_hs_code||'—')}</td>
+              </tr>`).join('')}
+              </tbody></table>`;
+
+        const rawJson = (data) => `<details style="margin-top:8px;">
+          <summary style="font-size:.67rem;color:var(--sub);cursor:pointer;">Raw JSON ▼</summary>
+          <div class="result-json">${esc(JSON.stringify(data,null,2))}</div>
+        </details>`;
+
+        try {
+          const d1 = await dvGet(q1);
+          const rows1 = d1['crcf9_s_i_detail_crcf9_s_i'] || [];
+          eResultEl.innerHTML =
+            `<div class="badge-ok" style="margin-bottom:8px;">✅ 試行1 成功 — navigation: crcf9_s_i_detail_crcf9_s_i (${rows1.length}件)</div>`
+            + detailTable(rows1) + rawJson(d1);
+
+        } catch(e1) {
+          // 試行2: navigation: crcf9_s_i_details
+          const q2 = `cr49f_s_is(${siGuid})?$select=cr49f_s_iid,cr49f_lc_no` +
+                     `&$expand=crcf9_s_i_details($select=crcf9_productname,crcf9_weight,crcf9_price,crcf9_hs_code)`;
+          eUrlEl.textContent += `\n[試行2] GET ${DV_API}/${q2}`;
+
+          try {
+            const d2 = await dvGet(q2);
+            const rows2 = d2['crcf9_s_i_details'] || [];
+            eResultEl.innerHTML =
+              `<div class="badge-warn" style="margin-bottom:4px;">⚠️ 試行1失敗: ${esc(e1.message)}</div>`
+              + `<div class="badge-ok" style="margin-bottom:8px;">✅ 試行2 成功 — navigation: crcf9_s_i_details (${rows2.length}件)</div>`
+              + detailTable(rows2) + rawJson(d2);
+
+          } catch(e2) {
+            // 試行3: 別fetch (_crcf9_s_i_id_value filter)
+            const q3 = `crcf9_s_i_details?$filter=_crcf9_s_i_id_value eq ${siGuid}` +
+                       `&$select=crcf9_productname,crcf9_weight,crcf9_price,crcf9_hs_code`;
+            eUrlEl.textContent += `\n[試行3-別fetch] GET ${DV_API}/${q3}`;
+
+            try {
+              const d3 = await dvGet(q3);
+              const rows3 = d3.value || [];
+              eResultEl.innerHTML =
+                `<div class="badge-warn" style="margin-bottom:4px;">⚠️ 試行1失敗: ${esc(e1.message)}</div>`
+                + `<div class="badge-warn" style="margin-bottom:4px;">⚠️ 試行2失敗: ${esc(e2.message)}</div>`
+                + `<div class="badge-ok" style="margin-bottom:8px;">✅ 試行3 成功 — $expand不要、別fetchで取得可能 (${rows3.length}件)</div>`
+                + detailTable(rows3) + rawJson(d3);
+
+            } catch(e3) {
+              eResultEl.innerHTML =
+                `<div class="badge-ng">❌ 全試行失敗</div>`
+                + `<div style="font-size:.7rem;margin-top:6px;color:var(--sub);">`
+                + `試行1: ${esc(e1.message)}<br>`
+                + `試行2: ${esc(e2.message)}<br>`
+                + `試行3: ${esc(e3.message)}</div>`;
+            }
+          }
+        }
+      }
+    }
 
   } catch(e) {
     const errMsg = `<span class="badge-ng">❌ エラー: ${esc(e.message)}</span>`;
