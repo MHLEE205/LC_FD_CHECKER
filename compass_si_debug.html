@@ -339,7 +339,7 @@ async function runSearch() {
 
   try {
     // Step B — cr49f_sale_contracts
-    const bPath = `cr49f_sale_contracts?$filter=cr49f_sale_contract_no eq '${scNo}'&$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date,cr49f_lc_no`;
+    const bPath = `cr49f_sale_contracts?$filter=contains(cr49f_sale_contract_no,'${buyerCode}')&$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date&$orderby=cr49f_sale_contract_date desc&$top=20`;
     document.getElementById('stepBUrl').textContent = `${DV_API}/${bPath}`;
     const bData = await dvGet(bPath);
     const scList = bData.value || [];
