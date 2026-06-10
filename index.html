@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.9 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.10 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -31,7 +31,7 @@
   --shadow:0 4px 24px rgba(0,0,0,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:14px 12px 90px;max-width:760px;margin:0 auto;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:14px 12px 90px;max-width:1200px;margin:0 auto;}
 h1{font-size:1.1rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px;}
 .ver{font-size:.68rem;color:var(--sub);margin-bottom:12px;}
 /* API bar */
@@ -210,7 +210,7 @@ select.fi{cursor:pointer;height:34px;}
 .form-group label{font-size:.67rem;color:var(--sub);display:block;margin-bottom:3px;font-weight:600;}
 /* SI export bar fixed */
 .si-export-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(15,17,23,.97);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:9px 14px;z-index:100;display:none;}
-.si-export-inner{max-width:760px;margin:0 auto;display:flex;gap:6px;align-items:center;}
+.si-export-inner{max-width:1200px;margin:0 auto;display:flex;gap:6px;align-items:center;}
 .si-export-inner .btn{flex:1;padding:9px 4px;}
 .lc-summary{background:var(--surface2);border:1px solid rgba(13,148,136,.3);border-radius:9px;padding:12px 14px;margin-bottom:11px;}
 .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;}
@@ -224,7 +224,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.9 (2026-04-27) | PDF텍스트추출 스캔PDF fallback 버그픽스</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.10 (2026-06-10) | COMPASS SI Dataverse 연결 인프라 추가 / 레이아웃 1200px</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -233,7 +233,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.9 (2026-04-27) | PDF텍스트추출 스캔PDF fallback 버그픽스</span>
+  <span>LEENEAR CORPORATION — v2.10 (2026-06-10) | COMPASS SI Dataverse 연결 인프라 추가 / 레이아웃 1200px</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -774,6 +774,195 @@ const LCSTORE='leenai_lc_v8';
 const FS_DB='leenai_fs_v1';
 const SYS=`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
 内部ルール: LC番号「DATED ON 日付」形式/COUNTRY OF ORIGIN:JAPAN・FREIGHT PREPAID はデフォルト自動出力/ADVISING BANK=SMBC/1コンテナ1アイテム`;
+
+/* ============================================================
+   SECTION: BUYER_BANK_MASTER
+   ⚠️ 이 블록만 수정하면 전체 Buyer/은행 패턴이 업데이트됨
+   추후 Dataverse 마스터テーブル化 or JSON 외부화 예정
+============================================================ */
+const BUYER_BANK_MASTER = {
+  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"기타",prefixes:["ILTEB"]}]},
+  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"기타",prefixes:["1331U"]}]},
+  "CR": { name:"JP CORELEX (VIETNAM)",          banks:[
+    {bankName:"BIDV (Ho Chi Minh)",   prefixes:["2500511","2600511"], normalize:"BIDV_HCM"},
+    {bankName:"WOORI BANK Vietnam",   prefixes:["ILC25","ILC26"],     normalize:"WOORI_VN"},
+    {bankName:"BIDV (HCM 2지점)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
+    {bankName:"기타",                 prefixes:["0124IL"]}
+  ]},
+  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"기타",prefixes:["M4258"]}]},
+  "DN": { name:"DONGWON PAPER",                 banks:[{bankName:"WOORI BANK",            prefixes:["M42K5","M88ST"]}]},
+  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"단일은행",              prefixes:["I02","I03","LCUHW"]}]},
+  "HK": { name:"HKB - HOALU PAPER",             banks:[{bankName:"VIETINBANK",            prefixes:["0142IL"]}]},
+  "IK": { name:"INDAH KIAT",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI771"]},{bankName:"WOORI BANK",prefixes:["ILC03"]}]},
+  "KC": { name:"TKC KRAFT",                     banks:[{bankName:"BIDV Vietnam",          prefixes:["LI24B","LI25B","LI26B"], normalize:"BIDV_VN"}]},
+  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"기타",prefixes:["000ILU"]}]},
+  "NT": { name:"NATURA PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M0609"]},{bankName:"WOORI BANK NY",prefixes:["MD2QR"]}]},
+  "PC": { name:"PAPER COREA",                   banks:[{bankName:"WOORI BANK NY",         prefixes:["MD2QR"]},{bankName:"WOORI BANK LA",prefixes:["M0609"]}]},
+  "PI": { name:"PINDO DELI",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI601"]}]},
+  "SG": { name:"SAIGON PAPER CORPORATION",      banks:[
+    {bankName:"VIETCOMBANK (CAI MEP)", prefixes:["3640IL"]},
+    {bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26"], normalize:"WOORI_VN"},
+    {bankName:"기타",                  prefixes:["TF250"]}
+  ]},
+  "TA": { name:"THUAN AN PAPER",                banks:[{bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26","ILC24"], normalize:"WOORI_VN"}]},
+  "TH": { name:"THAI PAPER MILL CO., LTD",      banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]}]},
+  "TJ": { name:"TJIWI KIMIA",                   banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]}]},
+  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"단일은행 (CLO시리얼)",  prefixes:["CLO"]}]},
+  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"기타",prefixes:["T261","T252"]}]},
+  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"기타",prefixes:["241LC"]}]},
+};
+
+// Buyer 코드 추출: LRS-2603MG1 → "MG" / LRS-2603A1 → "A" (ASPEX 1글자 대응)
+function extractBuyerCode(scNo) {
+  const m = String(scNo || '').match(/LRS-\d{4}([A-Z]+)\d/);
+  return m ? m[1] : null;
+}
+
+// LC번호에서 은행 그룹 판별 (normalize 있으면 연도 무관 동일 그룹)
+function detectBankGroup(lcNo, buyerCode) {
+  const master = BUYER_BANK_MASTER[buyerCode];
+  if (!master) return null;
+  const lcBase = String(lcNo || '').split(' DATED')[0].trim().toUpperCase();
+  for (const bank of master.banks) {
+    for (const pfx of bank.prefixes) {
+      if (lcBase.startsWith(pfx.toUpperCase())) {
+        return bank.normalize || pfx;
+      }
+    }
+  }
+  return null;
+}
+
+/* ============================================================
+   SECTION: COMPASS_DATAVERSE_INFRA
+   COMPASS Dataverse 직접 연결 인프라 (Phase2~)
+   ※ dvToken은 이 섹션에서만 관리. graphToken と混用禁止。
+============================================================ */
+const DV_CLIENT_ID   = 'f071a165-5e9b-44bf-b6a1-baba654524db';
+const DV_TENANT_ID   = 'a56988ff-c2b8-4df8-9727-889ad4205198';
+const DV_REDIRECT    = 'https://mhlee205.github.io/LC_FD_CHECKER/';
+const DV_SCOPE       = 'https://orgde512c6f.crm7.dynamics.com/user_impersonation offline_access';
+const DV_API         = 'https://orgde512c6f.crm7.dynamics.com/api/data/v9.2';
+
+let dvToken  = null;
+let dvExpiry = 0;
+
+function dvTokenValid() { return dvToken && Date.now() < dvExpiry; }
+
+function _b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function _sha256(s){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
+function _randStr(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return _b64url(a).slice(0,n); }
+
+async function startDvLogin() {
+  const v=_randStr(64), st=_randStr(16);
+  const ch=_b64url(await _sha256(v));
+  sessionStorage.setItem('dv_pkce_v',v);
+  sessionStorage.setItem('dv_pkce_s',st);
+  sessionStorage.setItem('dv_return_tab','comp');
+  const p=new URLSearchParams({
+    client_id:DV_CLIENT_ID, response_type:'code',
+    redirect_uri:DV_REDIRECT, scope:DV_SCOPE,
+    state:st, code_challenge:ch, code_challenge_method:'S256',
+    prompt:'select_account'
+  });
+  location.href=`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/authorize?${p}`;
+}
+
+async function handleDvCallback() {
+  const p=new URLSearchParams(location.search);
+  const code=p.get('code'), st=p.get('state');
+  if(!code) return false;
+  if(st!==sessionStorage.getItem('dv_pkce_s')){ console.warn('DV state mismatch'); return false; }
+  const v=sessionStorage.getItem('dv_pkce_v');
+  const res=await fetch(`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/token`,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({
+      client_id:DV_CLIENT_ID, grant_type:'authorization_code',
+      code, redirect_uri:DV_REDIRECT,
+      code_verifier:v, scope:DV_SCOPE
+    })
+  });
+  const d=await res.json();
+  if(d.error){ console.error('DV Token error:',d.error_description); return false; }
+  dvToken=d.access_token;
+  dvExpiry=Date.now()+(d.expires_in-60)*1000;
+  sessionStorage.removeItem('dv_pkce_v');
+  sessionStorage.removeItem('dv_pkce_s');
+  history.replaceState({},'',DV_REDIRECT);
+  return true;
+}
+
+async function dvGet(path) {
+  const res=await fetch(`${DV_API}/${path}`,{
+    headers:{
+      'Authorization':`Bearer ${dvToken}`,
+      'OData-MaxVersion':'4.0','OData-Version':'4.0',
+      'Accept':'application/json',
+      'Prefer':'odata.include-annotations="OData.Community.Display.V1.FormattedValue"'
+    }
+  });
+  if(!res.ok){
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`DV API ${res.status}: ${e?.error?.message||res.statusText}`);
+  }
+  return res.json();
+}
+
+// 過去SI取得 (Phase3で呼び出す)
+async function fetchPastSIs(contractNo, lcNo) {
+  if(!dvTokenValid()) return [];
+  try {
+    const buyerCode = extractBuyerCode(contractNo);
+    if(!buyerCode) return [];
+
+    const scData = await dvGet(
+      `cr49f_sale_contracts?$filter=contains(cr49f_sale_contract_no,'${buyerCode}')` +
+      `&$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date` +
+      `&$orderby=cr49f_sale_contract_date desc&$top=20`
+    );
+    const scList = scData.value || [];
+    if(!scList.length) return [];
+
+    const siFields = [
+      'cr49f_s_iid','cr49f_lc_no','cr49f_sale_contract_id',
+      'crcf9_consignee','crcf9_notify_party','crcf9_address',
+      'crcf9_tel','crcf9_fax','crcf9_payment_deadline',
+      'cr49f_payment_terms','crcf9_place_of_delivery_1',
+      'crcf9_place_of_delivery_2','crcf9_bl_text1',
+      'crcf9_all','crcf9_invoicetext','crcf9_bencert_text',
+      'crcf9_remark','crcf9_payment_classification',
+      'crcf9_sino','createdon'
+    ].join(',');
+
+    const siArrays = await Promise.all(
+      scList.map(sc =>
+        dvGet(
+          `cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${sc.cr49f_sale_contractid}` +
+          ` and crcf9_payment_classification eq 'LC' and crcf9_sino eq 1` +
+          `&$select=${siFields}`
+        ).then(d => (d.value||[]).map(si=>({...si,_sc_no:sc.cr49f_sale_contract_no})))
+         .catch(()=>[])
+      )
+    );
+    const allSIs = siArrays.flat();
+    if(!allSIs.length) return [];
+
+    const bankGroup = detectBankGroup(lcNo, buyerCode);
+    let filtered = allSIs;
+    if(bankGroup) {
+      const f = allSIs.filter(si => detectBankGroup(si.cr49f_lc_no, buyerCode) === bankGroup);
+      if(f.length > 0) filtered = f;
+    }
+
+    filtered.sort((a,b) => new Date(b.createdon) - new Date(a.createdon));
+    return filtered.slice(0,3);
+
+  } catch(e) {
+    console.warn('fetchPastSIs error:', e.message);
+    return [];
+  }
+}
 
 /* ============================================================
    SECTION: STATE
@@ -3578,7 +3767,13 @@ function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').repla
 /* ============================================================
    SECTION: INIT
 ============================================================ */
-window.addEventListener('DOMContentLoaded',()=>{
+window.addEventListener('DOMContentLoaded',async()=>{
+  // COMPASS DV 콜백 처리
+  if(new URLSearchParams(location.search).get('code')) {
+    await handleDvCallback();
+    const retTab = sessionStorage.getItem('dv_return_tab');
+    if(retTab) { sessionStorage.removeItem('dv_return_tab'); goTab(retTab); }
+  }
   const k=gk();
   if(k)setSt(`✅ API Key登録済み (${k.slice(0,16)}...)`,'ok');
   else setSt('⚠️ API Key未登録 — 入力して保存してください','ng');
