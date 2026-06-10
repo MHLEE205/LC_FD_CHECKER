@@ -261,7 +261,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.17 (2026-06-10) | 과거SI 상품명세(s_i_detail) 표시 추가</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.17 (2026-06-10) | 過去SI 商品明細(s_i_detail) 表示追加</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -270,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.17 (2026-06-10) | 과거SI 상품명세(s_i_detail) 표시 추가</span>
+  <span>LEENEAR CORPORATION — v2.17 (2026-06-10) | 過去SI 商品明細(s_i_detail) 表示追加</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -457,8 +457,8 @@ select.fi{cursor:pointer;height:34px;}
     <div class="card">
       <div class="ct">📂 取引種別を選択</div>
       <div class="si-src-tabs" style="margin-bottom:0;">
-        <div class="si-src-tab active" id="acl-src-lc" onclick="setAclSrc('lc')">🏦 LC거래<br><span style="font-size:.80rem;font-weight:400;">LC JSONを使用</span></div>
-        <div class="si-src-tab" id="acl-src-tt" onclick="setAclSrc('tt')">📄 TT / DP거래<br><span style="font-size:.80rem;font-weight:400;">COMPASS Excelを使用</span></div>
+        <div class="si-src-tab active" id="acl-src-lc" onclick="setAclSrc('lc')">🏦 LC取引<br><span style="font-size:.80rem;font-weight:400;">LC JSONを使用</span></div>
+        <div class="si-src-tab" id="acl-src-tt" onclick="setAclSrc('tt')">📄 TT / DP取引<br><span style="font-size:.80rem;font-weight:400;">COMPASS Excelを使用</span></div>
       </div>
     </div>
 
@@ -840,35 +840,35 @@ const SYS=`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
    추후 Dataverse 마스터テーブル化 or JSON 외부화 예정
 ============================================================ */
 const BUYER_BANK_MASTER = {
-  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"기타",prefixes:["ILTEB"]}]},
-  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"기타",prefixes:["1331U"]}]},
+  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"その他",prefixes:["ILTEB"]}]},
+  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"その他",prefixes:["1331U"]}]},
   "CR": { name:"JP CORELEX (VIETNAM)",          banks:[
     {bankName:"BIDV (Ho Chi Minh)",   prefixes:["2500511","2600511"], normalize:"BIDV_HCM"},
     {bankName:"WOORI BANK Vietnam",   prefixes:["ILC25","ILC26"],     normalize:"WOORI_VN"},
-    {bankName:"BIDV (HCM 2지점)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
-    {bankName:"기타",                 prefixes:["0124IL"]}
+    {bankName:"BIDV (HCM 2支店)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
+    {bankName:"その他",                 prefixes:["0124IL"]}
   ]},
-  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"기타",prefixes:["M4258"]}]},
+  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"その他",prefixes:["M4258"]}]},
   "DN": { name:"DONGWON PAPER",                 banks:[{bankName:"WOORI BANK",            prefixes:["M42K5","M88ST"]}]},
-  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"단일은행",              prefixes:["I02","I03","LCUHW"]}]},
+  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"単一銀行",              prefixes:["I02","I03","LCUHW"]}]},
   "HK": { name:"HKB - HOALU PAPER",             banks:[{bankName:"VIETINBANK",            prefixes:["0142IL"]}]},
   "IK": { name:"INDAH KIAT",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI771"]},{bankName:"WOORI BANK",prefixes:["ILC03"]}]},
   "KC": { name:"TKC KRAFT",                     banks:[{bankName:"BIDV Vietnam",          prefixes:["LI24B","LI25B","LI26B"], normalize:"BIDV_VN"}]},
-  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"기타",prefixes:["000ILU"]}]},
+  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"その他",prefixes:["000ILU"]}]},
   "NT": { name:"NATURA PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M0609"]},{bankName:"WOORI BANK NY",prefixes:["MD2QR"]}]},
   "PC": { name:"PAPER COREA",                   banks:[{bankName:"WOORI BANK NY",         prefixes:["MD2QR"]},{bankName:"WOORI BANK LA",prefixes:["M0609"]}]},
   "PI": { name:"PINDO DELI",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI601"]}]},
   "SG": { name:"SAIGON PAPER CORPORATION",      banks:[
     {bankName:"VIETCOMBANK (CAI MEP)", prefixes:["3640IL"]},
     {bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26"], normalize:"WOORI_VN"},
-    {bankName:"기타",                  prefixes:["TF250"]}
+    {bankName:"その他",                  prefixes:["TF250"]}
   ]},
   "TA": { name:"THUAN AN PAPER",                banks:[{bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26","ILC24"], normalize:"WOORI_VN"}]},
   "TH": { name:"THAI PAPER MILL CO., LTD",      banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]}]},
   "TJ": { name:"TJIWI KIMIA",                   banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]}]},
-  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"단일은행 (CLO시리얼)",  prefixes:["CLO"]}]},
-  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"기타",prefixes:["T261","T252"]}]},
-  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"기타",prefixes:["241LC"]}]},
+  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"単一銀行 (CLOシリアル)",  prefixes:["CLO"]}]},
+  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"その他",prefixes:["T261","T252"]}]},
+  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"その他",prefixes:["241LC"]}]},
 };
 
 // Buyer 코드 추출: LRS-2603MG1 → "MG" / LRS-2603A1 → "A" (ASPEX 1글자 대응)

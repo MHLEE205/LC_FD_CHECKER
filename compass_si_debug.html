@@ -51,7 +51,7 @@ input::placeholder{color:var(--sub2);}
 <body>
 
 <h1>🔍 COMPASS SI Debug Tool</h1>
-<div class="ver" id="header-sub">LEENEAR CORPORATION — v1.1 (2026-06-10) | Step E: s_i_detail $expand 검증 추가</div>
+<div class="ver" id="header-sub">LEENEAR CORPORATION — v1.1 (2026-06-10) | Step E: s_i_detail $expand 検証追加</div>
 
 <!-- ① 로그인 -->
 <div class="step-card">
@@ -66,11 +66,11 @@ input::placeholder{color:var(--sub2);}
   <div class="step-title">② 検索条件入力</div>
   <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
     <div>
-      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">계약번호 (SC No)</div>
+      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">契約番号 (SC No)</div>
       <input type="text" id="scNoInput" placeholder="例) LRS-2604MG1" style="width:180px;">
     </div>
     <div>
-      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">이번 LC 번호 (은행 감지용)</div>
+      <div style="font-size:.7rem;color:var(--sub);margin-bottom:4px;">今回のLC番号 (銀行判別用)</div>
       <input type="text" id="lcNoInput" placeholder="例) MI60526000243" style="width:220px;">
     </div>
     <button id="searchBtn" onclick="runSearch()">🔍 検索実行</button>
@@ -80,26 +80,26 @@ input::placeholder{color:var(--sub2);}
 <!-- ③ 결과 -->
 <div id="resultsArea" style="display:none;">
   <div class="step-card">
-    <div class="step-title">Step A — Buyer 코드 &amp; 은행 감지</div>
+    <div class="step-title">Step A — Buyer コード &amp; 銀行判別</div>
     <div id="stepAResult"></div>
   </div>
   <div class="step-card">
-    <div class="step-title">Step B — cr49f_sale_contracts 검색 결과</div>
+    <div class="step-title">Step B — cr49f_sale_contracts 検索結果</div>
     <div id="stepBUrl" class="url-box" style="margin-bottom:8px;"></div>
     <div id="stepBResult"></div>
   </div>
   <div class="step-card">
-    <div class="step-title">Step C — cr49f_s_is 조회 결과 (전체)</div>
+    <div class="step-title">Step C — cr49f_s_is 照会結果 (全件)</div>
     <div id="stepCResult"></div>
   </div>
   <div class="step-card">
-    <div class="step-title">Step D — 은행 필터 후 최종 결과 (Max 3건)</div>
+    <div class="step-title">Step D — 銀行フィルター後 最終結果 (Max 3件)</div>
     <div id="stepDResult"></div>
   </div>
   <div class="step-card">
-    <div class="step-title">Step E — crcf9_s_i_detail $expand 검증</div>
+    <div class="step-title">Step E — crcf9_s_i_detail $expand 検証</div>
     <div style="font-size:.72rem;color:var(--sub);margin-bottom:8px;">
-      Step D의 SI #1 GUIDを使って $expand で商品明細を取得。navigation property名のテスト。
+      Step D の SI #1 GUIDを使って $expand で商品明細を取得。navigation property名のテスト。
     </div>
     <div id="stepEUrl" class="url-box" style="margin-bottom:8px;"></div>
     <div id="stepEResult"></div>
@@ -117,35 +117,35 @@ input::placeholder{color:var(--sub2);}
 // ⚠️ 이 블록만 수정하면 전체 Buyer/은행 패턴이 업데이트됨
 // ══════════════════════════════════════════════════════════════
 const BUYER_BANK_MASTER = {
-  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"기타",prefixes:["ILTEB"]}]},
-  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"기타",prefixes:["1331U"]}]},
+  "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"その他",prefixes:["ILTEB"]}]},
+  "CA": { name:"C.A.S. PAPER MILL CO., LTD",   banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]},{bankName:"その他",prefixes:["1331U"]}]},
   "CR": { name:"JP CORELEX (VIETNAM)",          banks:[
     {bankName:"BIDV (Ho Chi Minh)",   prefixes:["2500511","2600511"], normalize:"BIDV_HCM"},
     {bankName:"WOORI BANK Vietnam",   prefixes:["ILC25","ILC26"],     normalize:"WOORI_VN"},
-    {bankName:"BIDV (HCM 2지점)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
-    {bankName:"기타",                 prefixes:["0124IL"]}
+    {bankName:"BIDV (HCM 2支店)",     prefixes:["LI25B","LI26B","LI24B"], normalize:"BIDV_HCM2"},
+    {bankName:"その他",                 prefixes:["0124IL"]}
   ]},
-  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"기타",prefixes:["M4258"]}]},
+  "DH": { name:"DAEHAN PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M06R9"]},{bankName:"その他",prefixes:["M4258"]}]},
   "DN": { name:"DONGWON PAPER",                 banks:[{bankName:"WOORI BANK",            prefixes:["M42K5","M88ST"]}]},
-  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"단일은행",              prefixes:["I02","I03","LCUHW"]}]},
+  "FJ": { name:"PT. FAJAR SURYA WISESA",        banks:[{bankName:"単一銀行",              prefixes:["I02","I03","LCUHW"]}]},
   "HK": { name:"HKB - HOALU PAPER",             banks:[{bankName:"VIETINBANK",            prefixes:["0142IL"]}]},
   "IK": { name:"INDAH KIAT",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI771"]},{bankName:"WOORI BANK",prefixes:["ILC03"]}]},
   "KC": { name:"TKC KRAFT",                     banks:[{bankName:"BIDV Vietnam",          prefixes:["LI24B","LI25B","LI26B"], normalize:"BIDV_VN"}]},
-  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"기타",prefixes:["000ILU"]}]},
+  "MG": { name:"MEGA SURYA ERATAMA",            banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]},{bankName:"その他",prefixes:["000ILU"]}]},
   "NT": { name:"NATURA PAPER",                  banks:[{bankName:"WOORI BANK LA",         prefixes:["M0609"]},{bankName:"WOORI BANK NY",prefixes:["MD2QR"]}]},
   "PC": { name:"PAPER COREA",                   banks:[{bankName:"WOORI BANK NY",         prefixes:["MD2QR"]},{bankName:"WOORI BANK LA",prefixes:["M0609"]}]},
   "PI": { name:"PINDO DELI",                    banks:[{bankName:"BANK MANDIRI",          prefixes:["MI601"]}]},
   "SG": { name:"SAIGON PAPER CORPORATION",      banks:[
     {bankName:"VIETCOMBANK (CAI MEP)", prefixes:["3640IL"]},
     {bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26"], normalize:"WOORI_VN"},
-    {bankName:"기타",                  prefixes:["TF250"]}
+    {bankName:"その他",                  prefixes:["TF250"]}
   ]},
   "TA": { name:"THUAN AN PAPER",                banks:[{bankName:"WOORI BANK Vietnam",    prefixes:["ILC25","ILC26","ILC24"], normalize:"WOORI_VN"}]},
   "TH": { name:"THAI PAPER MILL CO., LTD",      banks:[{bankName:"KASIKORNBANK",          prefixes:["THF"]}]},
   "TJ": { name:"TJIWI KIMIA",                   banks:[{bankName:"BANK MANDIRI Surabaya", prefixes:["MI605"]}]},
-  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"단일은행 (CLO시리얼)",  prefixes:["CLO"]}]},
-  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"기타",prefixes:["T261","T252"]}]},
-  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"기타",prefixes:["241LC"]}]},
+  "TQ": { name:"TAN QUANG PHAT PAPER",          banks:[{bankName:"単一銀行 (CLOシリアル)",  prefixes:["CLO"]}]},
+  "VD": { name:"VAN DIEM PAPER",                banks:[{bankName:"VIETINBANK",            prefixes:["0343IL"]},{bankName:"その他",prefixes:["T261","T252"]}]},
+  "XS": { name:"XSD INTERNATIONAL PAPER",       banks:[{bankName:"MAYBANK",               prefixes:["MY002"]},{bankName:"その他",prefixes:["241LC"]}]},
 };
 
 function extractBuyerCode(scNo) {
@@ -414,13 +414,13 @@ async function runSearch() {
     const eUrlEl    = document.getElementById('stepEUrl');
 
     if(final3.length === 0) {
-      eResultEl.innerHTML = '<span class="badge-warn">Step D 결과 없음 — 스킵</span>';
+      eResultEl.innerHTML = '<span class="badge-warn">Step D 結果なし — スキップ</span>';
     } else {
       eResultEl.innerHTML = '<span class="empty-msg">取得中...</span>';
       const siGuid = final3[0].cr49f_s_iid;
 
       if(!siGuid) {
-        eResultEl.innerHTML = '<span class="badge-ng">SI GUID 없음</span>';
+        eResultEl.innerHTML = '<span class="badge-ng">SI GUID なし</span>';
       } else {
 
         // 試行1: $expand with nested $select (navigation: crcf9_s_i_detail_crcf9_s_i)
