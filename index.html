@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.10 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.11 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -218,13 +218,30 @@ select.fi{cursor:pointer;height:34px;}
 .sum-key{color:var(--sub);}
 .sum-val{font-weight:700;}
 @media print{.si-export-bar,.api-bar,.folder-bar,.tabs,.btn,.copy-btn,.ubox,.dzone{display:none!important;}body{background:#fff;color:#000;padding:0;}.card,.si-field,.goods-wrap{background:#f9f9f9;border:1px solid #ccc;box-shadow:none;}.fi{background:#fff;color:#000;border:1px solid #ddd;}}
+/* ── COMPASS_SI 3컬럼 레이아웃 (Phase3) ── */
+.comp-3col{display:grid;grid-template-columns:280px 1fr 340px;gap:10px;align-items:start;}
+.comp-left-panel{position:sticky;top:10px;}
+.comp-right-panel{position:sticky;top:10px;max-height:calc(100vh - 80px);overflow-y:auto;}
+@media(max-width:960px){.comp-3col{grid-template-columns:1fr;}.comp-right-panel{position:static;max-height:none;order:-1;}}
+.past-si-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;}
+.past-si-header{font-size:.72rem;font-weight:700;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+.past-si-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:.7rem;}
+.past-si-card-title{font-weight:700;color:var(--ok);margin-bottom:6px;font-size:.71rem;}
+.past-si-field{display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;}
+.past-si-label{color:var(--sub);min-width:90px;flex-shrink:0;font-size:.67rem;padding-top:2px;}
+.past-si-val{flex:1;color:var(--text);white-space:pre-wrap;word-break:break-all;font-size:.68rem;line-height:1.4;}
+.apply-btn{background:rgba(13,148,136,.15);border:1px solid rgba(13,148,136,.3);border-radius:5px;color:var(--teal);font-size:.63rem;padding:2px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s;}
+.apply-btn:hover{background:rgba(13,148,136,.3);}
+.apply-all-btn{width:100%;margin-top:8px;background:rgba(13,148,136,.12);border:1px solid rgba(13,148,136,.35);border-radius:7px;color:var(--teal);font-size:.72rem;font-weight:700;padding:7px 4px;cursor:pointer;transition:all .2s;}
+.apply-all-btn:hover{background:rgba(13,148,136,.25);}
+.comp-dv-banner{background:var(--surface2);border:1px solid rgba(13,148,136,.25);border-radius:8px;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.7rem;flex-wrap:wrap;}
 </style>
 </head>
 <body>
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.10 (2026-06-10) | COMPASS SI Dataverse 연결 인프라 추가 / 레이아웃 1200px</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.11 (2026-06-10) | COMPASS SI 과거SI 패널 + Dataverse 직접 연결 완성</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -233,7 +250,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.10 (2026-06-10) | COMPASS SI Dataverse 연결 인프라 추가 / 레이아웃 1200px</span>
+  <span>LEENEAR CORPORATION — v2.11 (2026-06-10) | COMPASS SI 과거SI 패널 + Dataverse 직접 연결 완성</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -577,9 +594,20 @@ select.fi{cursor:pointer;height:34px;}
 <!-- ════════════════════════════════════════════
      ④ SI入力（COMPASS SI ツール）
 ════════════════════════════════════════════ -->
+<!-- ════════════════════════════════════════════
+     ④ SI入力（COMPASS SI ツール）
+════════════════════════════════════════════ -->
 <div class="panel" id="tab-comp">
 
-  <!-- LC選択 / TT選択 -->
+  <!-- COMPASS 로그인 배너 -->
+  <div id="compDvBanner" class="comp-dv-banner" style="display:none;">
+    <span>🔑 <strong>COMPASS</strong> に接続すると過去SIを自動参照できます</span>
+    <button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.7rem;font-weight:700;padding:5px 14px;cursor:pointer;">
+      COMPASSにログイン
+    </button>
+  </div>
+
+  <!-- LC/TT 선택 단계 -->
   <div id="comp-step1">
     <div class="card">
       <div class="ct">📂 入力ソース選択</div>
@@ -587,8 +615,6 @@ select.fi{cursor:pointer;height:34px;}
         <div class="si-src-tab active" id="comp-tab-lc" onclick="compSetSrc('lc')">🏦 LC（信用状）<br><span style="font-size:.6rem;font-weight:400;">登録済みLCから選択</span></div>
         <div class="si-src-tab" id="comp-tab-tt" onclick="compSetSrc('tt')">📄 TT / DP<br><span style="font-size:.6rem;font-weight:400;">販売契約書から手動入力</span></div>
       </div>
-
-      <!-- LC mode -->
       <div id="comp-lc-src">
         <div class="alert alert-info">💡 ① LC分析タブで分析済みのLCを選択するか、フォルダから読み込んでください。</div>
         <button class="btn btn-s" onclick="loadFromFolder('comp')" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#86efac;font-size:.72rem;padding:6px 10px;margin-bottom:8px;">📁 フォルダから読込</button>
@@ -597,8 +623,6 @@ select.fi{cursor:pointer;height:34px;}
         </div>
         <div id="compLcList"><div class="empty">① LC分析タブでLCを登録してください</div></div>
       </div>
-
-      <!-- TT/DP mode -->
       <div id="comp-tt-src" style="display:none;">
         <div class="alert alert-info">💡 TT/DP は販売契約書の情報から各フィールドを入力します。</div>
         <div class="manual-grid">
@@ -627,57 +651,71 @@ select.fi{cursor:pointer;height:34px;}
     </div>
   </div>
 
-  <!-- SI Form area -->
+  <!-- 3컬럼 레이아웃 (LC선택 후) -->
   <div id="comp-form" style="display:none;">
-    <div class="card">
-      <div class="ct">📋 COMPASS SI 入力フォーム</div>
+    <div class="comp-3col">
 
-      <!-- LC Summary -->
-      <div id="compLcSummary" style="display:none;"></div>
-
-      <!-- Special warnings -->
-      <div id="compSpecialWarn"></div>
-
-      <!-- Progress bar -->
-      <div class="si-prog-wrap">
-        <div class="si-prog-info"><span id="compProgTxt">入力完了: 0/0 項目</span><span id="compProgPct" style="color:var(--teal);font-weight:800;">0%</span></div>
-        <div class="si-prog-bar"><div class="si-prog-fill" id="compProgFill" style="width:0%"></div></div>
-        <div class="si-stats" id="compStatsRow"></div>
-      </div>
-
-      <!-- AI補完 -->
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
-        <div style="font-size:.7rem;font-weight:700;color:var(--sub);margin-bottom:5px;">🤖 AI補完（オプション）</div>
-        <div style="font-size:.67rem;color:var(--sub2);margin-bottom:7px;">47Aの複雑な条件解釈が必要な場合のみ使用。通常は不要。</div>
-        <button class="btn btn-s" id="compAiBtn" onclick="runCompAI()" style="font-size:.72rem;">🤖 47A詳細解析（AI補完）</button>
-        <div id="compAiProg" style="padding:7px 0;display:none;">
-          <div style="font-size:.73rem;color:var(--sub);display:flex;align-items:center;gap:7px;"><span class="spinner"></span><span id="compAiMsg">47A解析中... (15〜30秒)</span></div>
-        </div>
-        <div id="compAiNote" style="margin-top:8px;"></div>
-      </div>
-
-      <!-- VN tabs -->
-      <div id="compVnWrap" style="display:none;">
-        <div class="alert alert-vn">🇻🇳 <strong>ベトナム向け:</strong> SI#1（BL用）と SI#2（IV・PL用）の <strong>2件入力が必須</strong>です。</div>
-        <div class="si-vn-tabs">
-          <div class="si-vn-tab active" id="compVnTab1" onclick="switchCompSI(1)">📋 SI #1（BL用）</div>
-          <div class="si-vn-tab" id="compVnTab2" onclick="switchCompSI(2)">📄 SI #2（Invoice・PL用）</div>
+      <!-- 왼쪽: LC 요약 (280px) -->
+      <div class="comp-left-panel">
+        <div class="card" style="margin-bottom:0;">
+          <div class="ct" style="font-size:.7rem;">📋 LC情報</div>
+          <div id="compLcSummary"></div>
+          <button class="btn btn-s" onclick="resetCompForm()" style="margin-top:10px;font-size:.7rem;">← LC選択に戻る</button>
         </div>
       </div>
 
-      <!-- Form fields -->
-      <div id="compFormContent"></div>
-
-      <!-- Back button -->
-      <div class="btn-row" style="margin-top:12px;">
-        <button class="btn btn-s" onclick="resetCompForm()">← LC選択に戻る</button>
-        <button class="btn btn-s" onclick="exportCompJson()">📥 JSON出力</button>
-        <button class="btn btn-s" onclick="exportCompText()">📄 テキスト</button>
+      <!-- 중앙: SI 폼 (flex:1) -->
+      <div>
+        <div class="card">
+          <div class="ct">📋 COMPASS SI 入力フォーム</div>
+          <div id="compSpecialWarn"></div>
+          <div class="si-prog-wrap">
+            <div class="si-prog-info"><span id="compProgTxt">入力完了: 0/0 項目</span><span id="compProgPct" style="color:var(--teal);font-weight:700;"></span></div>
+            <div class="si-prog-bar"><div class="si-prog-fill" id="compProgFill" style="width:0%"></div></div>
+            <div class="si-stats" id="compStatsRow"></div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+            <div style="font-size:.7rem;font-weight:700;color:var(--sub);margin-bottom:5px;">🤖 AI補完（オプション）</div>
+            <div style="font-size:.67rem;color:var(--sub2);margin-bottom:7px;">47Aの複雑な条件解釈が必要な場合のみ使用。通常は不要。</div>
+            <button class="btn btn-s" id="compAiBtn" onclick="runCompAI()" style="font-size:.72rem;">🤖 47A詳細解析（AI補完）</button>
+            <div id="compAiProg" style="padding:7px 0;display:none;">
+              <div style="font-size:.73rem;color:var(--sub);display:flex;align-items:center;gap:7px;"><span class="spinner"></span><span id="compAiMsg">解析中...</span></div>
+            </div>
+            <div id="compAiNote" style="margin-top:8px;"></div>
+          </div>
+          <div id="compVnWrap" style="display:none;">
+            <div class="alert alert-vn">🇻🇳 <strong>ベトナム向け:</strong> SI#1（BL用）と SI#2（IV・PL用）の <strong>2件入力が必須</strong>です。</div>
+            <div class="si-vn-tabs">
+              <div class="si-vn-tab active" id="compVnTab1" onclick="switchCompSI(1)">📋 SI #1（BL用）</div>
+              <div class="si-vn-tab" id="compVnTab2" onclick="switchCompSI(2)">📄 SI #2（Invoice・PL用）</div>
+            </div>
+          </div>
+          <div id="compFormContent"></div>
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-s" onclick="exportCompJson()">📥 JSON出力</button>
+            <button class="btn btn-s" onclick="exportCompText()">📄 テキスト</button>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
 
-</div>
+      <!-- 오른쪽: 과거 SI 패널 (340px) -->
+      <div class="comp-right-panel">
+        <div class="past-si-panel">
+          <div class="past-si-header">
+            <span>📂 過去SI参照</span>
+            <span id="pastSiStatus" style="font-size:.65rem;color:var(--sub);">取得中...</span>
+          </div>
+          <div id="pastSiBankInfo" style="font-size:.65rem;color:var(--sub2);margin-bottom:8px;"></div>
+          <div id="pastSiContent">
+            <div class="empty" style="font-size:.7rem;">過去SIを取得中です...</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.comp-3col -->
+  </div><!-- /#comp-form -->
+
+</div><!-- /#tab-comp -->
 
 <!-- ════════════════════════════════════════════
      ⑤ 履歴
@@ -1328,7 +1366,11 @@ function goTab(t){
   });
   if(t==='fd')renderSelList('fdLcList','fd');
   if(t==='si'){renderSelList('siLcList','acl');restoreHistHandle();}
-  if(t==='comp')renderSelList('compLcList','comp');
+  if(t==='comp'){
+    renderSelList('compLcList','comp');
+    const banner=document.getElementById('compDvBanner');
+    if(banner) banner.style.display=dvTokenValid()?'none':'';
+  }
   if(t==='hist')renderHist();
   // Show/hide SI export bar
   const bar=document.getElementById('siExportBar');
@@ -3113,71 +3155,176 @@ function initCompLC(lc){
   renderCompSummary();
   detectCompSpecial();
   showCompForm();
-  // 과거 SI 데이터가 있으면 AI 참조 실행
-  if(siRefLoaded&&siRefData.length){
-    runSiRefImprove(lc);
+  pastSIsData=[];
+  renderPastSiPanel([],null,null);
+  if(dvTokenValid()){
+    fetchPastSIs(lc.contractNo||'',lc.lcNo||'').then(pastSIs=>{
+      pastSIsData=pastSIs;
+      const bc=extractBuyerCode(lc.contractNo||'');
+      const bg=detectBankGroup(lc.lcNo||'',bc);
+      renderPastSiPanel(pastSIs,bc,bg);
+      if(pastSIs.length) runSiRefImprove(lc,pastSIs);
+    });
+  } else {
+    if(siRefLoaded&&siRefData.length) runSiRefImprove(lc,null);
+    const banner=document.getElementById('compDvBanner');
+    if(banner) banner.style.display='';
   }
 }
 
-/* 과거 SI 참조로 포맷 개선 */
-async function runSiRefImprove(lc){
-  const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
-  const NP_KEY='cr49f_s_i.crcf9_notify_party';
-  const CL_KEY='cr49f_s_i.crcf9_payment_classification';
-  const SINO_KEY='cr49f_s_i.crcf9_sino';
-  const LC_KEY='cr49f_s_i.cr49f_lc_no';
+/* ============================================================
+   SECTION: PAST_SI_PANEL — 과거 SI 패널 렌더링 (Phase3)
+============================================================ */
+let pastSIsData = [];
 
-  const DATE_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
+function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
+  const statusEl  = document.getElementById('pastSiStatus');
+  const bankEl    = document.getElementById('pastSiBankInfo');
+  const contentEl = document.getElementById('pastSiContent');
+  if(!statusEl || !contentEl) return;
 
-  // LC번호에서 은행 프리픽스 추출 (앞 4~5자리)
-  function getBankPrefix(lcNo){
-    if(!lcNo)return'';
-    const s=String(lcNo).trim().split(/\s/)[0]; // "DATED ON" 이전 부분만
-    return s.slice(0,5).toUpperCase();
+  if(!pastSIs || pastSIs.length === 0) {
+    statusEl.textContent = dvTokenValid() ? '該当なし' : '未ログイン';
+    bankEl.textContent   = '';
+    contentEl.innerHTML  = `<div class="empty" style="font-size:.7rem;">${
+      dvTokenValid()
+        ? '過去SIが見つかりませんでした'
+        : '<button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.7rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>'
+    }</div>`;
+    return;
   }
 
-  // LC 건 SI#1만 추출
-  const lcSiRows=siRefData.filter(r=>r[CL_KEY]==='LC'&&String(r[SINO_KEY])==='1');
-  if(!lcSiRows.length)return;
+  statusEl.textContent = `✅ ${pastSIs.length}件取得済`;
+  bankEl.textContent   = bankGroup ? `Buyer: ${buyerCode||'—'} × Bank: ${bankGroup}` : `Buyer: ${buyerCode||'—'}`;
 
-  // 수입자 이름 추출 (새 LC의 applicant 또는 notifyParty46A에서)
-  const buyerKeyword=(lc.applicant||lc.notifyParty46A||'').split(/[\n,]/)[0].trim().slice(0,30).toLowerCase();
-  if(!buyerKeyword)return;
+  const APPLY_FIELDS = [
+    {key:'crcf9_consignee',    label:'Consignee',    siKey:'consignee'},
+    {key:'crcf9_notify_party', label:'Notify Party', siKey:'notifyParty'},
+    {key:'crcf9_address',      label:'Address',      siKey:'address'},
+    {key:'crcf9_tel',          label:'TEL',          siKey:'tel'},
+    {key:'crcf9_fax',          label:'FAX',          siKey:'fax'},
+    {key:'crcf9_bl_text1',     label:'BL Text1',     siKey:'blText1'},
+  ];
+  const REF_ONLY_FIELDS = [
+    {key:'crcf9_payment_deadline',    label:'支払期限(参照)'},
+    {key:'cr49f_payment_terms',       label:'支払条件(参照)'},
+    {key:'crcf9_place_of_delivery_1', label:'POD1(参照)'},
+    {key:'crcf9_all',                 label:'ALL(参照)'},
+    {key:'crcf9_invoicetext',         label:'InvText(参照)'},
+  ];
 
-  // 새 LC 은행 프리픽스
-  const newBankPrefix=getBankPrefix(lc.lcNo||'');
+  function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function trunc(s,n=120){const t=String(s||'');return t.length>n?t.slice(0,n)+'…':t;}
 
-  // ① 같은 수입자 필터 (Notify Party 키워드 매칭)
-  const byBuyer=lcSiRows.filter(r=>{
-    const np=String(r[NP_KEY]||'').toLowerCase();
-    return np.includes(buyerKeyword)||buyerKeyword.split(' ').some(w=>w.length>3&&np.includes(w));
+  let html = '';
+  pastSIs.forEach((si, idx) => {
+    const scNo    = si._sc_no||'—';
+    const lcNo    = si.cr49f_lc_no||'—';
+    const created = si.createdon?si.createdon.slice(0,10):'—';
+
+    html += `<div class="past-si-card">`;
+    html += `<div class="past-si-card-title">[SI #${idx+1}] ${_esc(scNo)} <span style="font-weight:400;color:var(--sub);font-size:.65rem;">${_esc(created)}</span></div>`;
+    html += `<div style="font-size:.65rem;color:var(--sub2);margin-bottom:6px;">${_esc(trunc(lcNo,50))}</div>`;
+
+    APPLY_FIELDS.forEach(f => {
+      const val = si[f.key];
+      if(!val) return;
+      html += `<div class="past-si-field">
+        <span class="past-si-label">${_esc(f.label)}</span>
+        <span class="past-si-val">${_esc(trunc(val,80))}</span>
+        <button class="apply-btn" onclick="applySiField('${f.siKey}',${JSON.stringify(val)})">→適用</button>
+      </div>`;
+    });
+
+    REF_ONLY_FIELDS.forEach(f => {
+      const val = si[f.key];
+      if(!val) return;
+      html += `<div class="past-si-field">
+        <span class="past-si-label" style="color:var(--sub2);">${_esc(f.label)}</span>
+        <span class="past-si-val" style="color:var(--sub);">${_esc(trunc(val,80))}</span>
+      </div>`;
+    });
+
+    html += `<button class="apply-all-btn" onclick="applyAllSiFields(${idx})">✨ このSIをすべて適用</button>`;
+    html += `</div>`;
   });
-  if(!byBuyer.length)return;
 
-  // ② 같은 은행 필터 (LC번호 프리픽스 비교) — 프리픽스가 없으면 스킵
-  const byBank=newBankPrefix?byBuyer.filter(r=>getBankPrefix(r[LC_KEY]||'')===newBankPrefix):byBuyer;
+  contentEl.innerHTML = html;
+}
 
-  // ③ 3개월 이내 필터 (계약일 기준)
-  const today=new Date();
-  const cutoff=new Date(today);cutoff.setMonth(cutoff.getMonth()-3);
-  const by3m=byBank.filter(r=>{
-    const d=r[DATE_KEY];if(!d)return false;
-    const dt=new Date(String(d).slice(0,10));
-    return dt>=cutoff&&dt<today;
-  });
+function applySiField(siKey, value) {
+  if(!siVals) return;
+  siVals[siKey] = value;
+  renderCompFormContent();
+  setTimeout(() => {
+    const el = document.getElementById(`cfi_${siKey}_1`);
+    if(el) { el.style.borderColor='var(--teal)'; setTimeout(()=>el.style.borderColor='',1500); }
+  }, 100);
+}
 
-  // ④ 날짜 내림차순 정렬 후 Max 3건
-  const sorted=by3m.sort((a,b)=>{
-    const da=new Date(String(a[DATE_KEY]||'').slice(0,10));
-    const db=new Date(String(b[DATE_KEY]||'').slice(0,10));
-    return db-da;
-  });
+function applyAllSiFields(idx) {
+  const si = pastSIsData[idx];
+  if(!si || !siVals) return;
+  const SKIP = new Set(['lcNo','contractNo','paymentDeadline','paymentTerms','pod1','pod2','pod3','all','invoiceText','beneText','portOfDischarge']);
+  const MAP  = {
+    crcf9_consignee:'consignee', crcf9_notify_party:'notifyParty',
+    crcf9_address:'address', crcf9_tel:'tel', crcf9_fax:'fax',
+    crcf9_bl_text1:'blText1', crcf9_shipping_mark:'shippingMark', crcf9_remark:'remark',
+  };
+  Object.entries(MAP).forEach(([dvKey,siKey])=>{ if(!SKIP.has(siKey)&&si[dvKey]) siVals[siKey]=si[dvKey]; });
+  renderCompFormContent();
+  const noteEl=document.getElementById('compAiNote');
+  if(noteEl) noteEl.innerHTML=`<div class="alert alert-ok">✅ SI #${idx+1} (${si._sc_no||''}) の内容を適用しました。LC固有値（支払期限・POD・ALL等）は維持されています。</div>`;
+}
 
-  if(!sorted.length)return; // 매칭 없으면 종료
+/* 過去SI参照でフォーム改善 — Phase3: Dataverse優先/Excel폴백 */
+async function runSiRefImprove(lc, pastSIs){
+  const noteEl=document.getElementById('compAiNote');
 
-  // 최근 3건
-  const recentSi=sorted.slice(0,3);
-  const siSummary=recentSi.map((r,i)=>`
+  // --- データソース選択: Dataverse優先 / Excel폴백 ---
+  let siSummary='', refNos='', sourceLabel='';
+
+  if(pastSIs && pastSIs.length > 0){
+    // Dataverse 데이터 사용
+    sourceLabel=`COMPASS Dataverse (${pastSIs.length}件)`;
+    siSummary=pastSIs.map((si,i)=>`
+[過去SI ${i+1}件目 — ${si._sc_no||''}]
+LC番号: ${si.cr49f_lc_no||''}
+Consignee: ${si.crcf9_consignee||''}
+Notify Party: ${si.crcf9_notify_party||''}
+Address: ${si.crcf9_address||''}
+TEL: ${si.crcf9_tel||''}
+FAX: ${si.crcf9_fax||''}
+Payment Deadline: ${si.crcf9_payment_deadline||''}
+Payment Terms: ${si.cr49f_payment_terms||''}
+POD1: ${si.crcf9_place_of_delivery_1||''}
+BL Text1: ${si.crcf9_bl_text1||''}
+ALL: ${si.crcf9_all||''}`).join('\n');
+    refNos=pastSIs.map(si=>si._sc_no||'').filter(Boolean).join('、');
+  } else {
+    // Excel 폴백 (siRefData)
+    if(!siRefLoaded||!siRefData.length) return;
+    const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
+    const NP_KEY='cr49f_s_i.crcf9_notify_party';
+    const CL_KEY='cr49f_s_i.crcf9_payment_classification';
+    const SINO_KEY='cr49f_s_i.crcf9_sino';
+    const LC_KEY='cr49f_s_i.cr49f_lc_no';
+    const DATE_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
+    function getBankPrefix(lcNo){if(!lcNo)return'';return String(lcNo).trim().split(/\s/)[0].slice(0,5).toUpperCase();}
+    const lcSiRows=siRefData.filter(r=>r[CL_KEY]==='LC'&&String(r[SINO_KEY])==='1');
+    if(!lcSiRows.length) return;
+    const buyerKeyword=(lc.applicant||lc.notifyParty46A||'').split(/[\n,]/)[0].trim().slice(0,30).toLowerCase();
+    if(!buyerKeyword) return;
+    const newBankPrefix=getBankPrefix(lc.lcNo||'');
+    const byBuyer=lcSiRows.filter(r=>{const np=String(r[NP_KEY]||'').toLowerCase();return np.includes(buyerKeyword)||buyerKeyword.split(' ').some(w=>w.length>3&&np.includes(w));});
+    if(!byBuyer.length) return;
+    const byBank=newBankPrefix?byBuyer.filter(r=>getBankPrefix(r[LC_KEY]||'')===newBankPrefix):byBuyer;
+    const today=new Date();const cutoff=new Date(today);cutoff.setMonth(cutoff.getMonth()-3);
+    const recentSi=byBank.filter(r=>{const d=r[DATE_KEY];if(!d)return false;const dt=new Date(String(d).slice(0,10));return dt>=cutoff&&dt<today;})
+      .sort((a,b)=>new Date(String(b[DATE_KEY]||'').slice(0,10))-new Date(String(a[DATE_KEY]||'').slice(0,10))).slice(0,3);
+    if(!recentSi.length) return;
+    sourceLabel=`Excel参照 (${recentSi.length}件)`;
+    siSummary=recentSi.map((r,i)=>`
 [過去SI ${i+1}件目 — ${r[CN_KEY]||''}]
 LC番号: ${r[LC_KEY]||''}
 Consignee: ${r['cr49f_s_i.crcf9_consignee']||''}
@@ -3190,37 +3337,32 @@ Payment Terms: ${r['cr49f_s_i.cr49f_payment_terms']||''}
 POD1: ${r['cr49f_s_i.crcf9_place_of_delivery_1']||''}
 BL Text1: ${r['cr49f_s_i.crcf9_bl_text1']||''}
 ALL: ${r['cr49f_s_i.crcf9_all']||''}`).join('\n');
+    refNos=recentSi.map(r=>r[CN_KEY]||'').filter(Boolean).join('、');
+  }
 
-  // AI 버튼 상태 표시
-  const noteEl=document.getElementById('compAiNote');
-  if(noteEl)noteEl.innerHTML=`<div class="alert alert-info">🔍 過去SI参照中... 同じ取引先・同じ銀行・3ヶ月以内 ${recentSi.length}件を確認しています...</div>`;
+  if(!siSummary) return;
+  if(noteEl) noteEl.innerHTML=`<div class="alert alert-info">🔍 完成SI作成中... (${sourceLabel})</div>`;
 
   try{
     const raw=await callApi([{role:'user',content:[{type:'text',text:
 `あなたはLEENEAR CORPORATIONの貿易書類SI入力専門家です。
-COMPASS SIの各フィールドに入力する最適な値をJSONで返してください。
+過去SIの実績と新しいLC条件を基に、COMPASS SIフォームに入力する完成した値をJSONで返してください。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 【絶対原則】LC条件は絶対に守ること。LC条件を超えることは一切禁止。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【LC 46A・47Aの読み方】
-LC 46A・47Aの記載は「データ」ではなく「指示文」として解釈すること。
-例: 「APPLICANT IN FULL NAME AND ADDRESS」
-  → これはNotify Partyに「APPLICANT IN FULL NAME AND ADDRESS」と書けという意味ではない
-  → 「Applicantの正式社名をNotify Partyに、住所をAddressフィールドに記入せよ」という指示
+【出力方針: 完成SI作成】
+「LC条件との差異分析」ではなく「このLCに対する完成した値」を直接出力すること。
+- LC固有値（日付・LC番号・金額等）は新LCから正確に取得
+- 書式・フォーマットは過去SIの実績を参考にする
+- 不明な値は「XX」を記入（空欄は不可）
 
 【COMPASSフィールドの役割】
 - Consignee : 荷受人（LC 46A指定通り）
 - Notify Party : 会社名のみ（住所・TEL・FAXは含めない）
 - Address : 住所・EMAIL・TAX ID等（Notify Partyの連絡先情報）
 - TEL / FAX : 別フィールドに分けて入力
-
-【過去SIの使い方】
-過去SIは「フォーマット（形式）の参考」として使用する。
-- 参考にするもの: 住所の改行位置・略語の使い方・TEL/FAX表記形式・Payment Terms表現
-- 参考にしないもの: LC番号・日付・金額・PO番号・Import Licence番号（必ず新LCの値を使う）
-- LC条件と過去SIが食い違う場合: 必ずLC条件を優先する
 
 === 新しいLC情報 ===
 LC番号: ${lc.lcNo||''} DATED ON ${lc.lcDate||''}
@@ -3232,54 +3374,53 @@ POD(44F): ${lc.pod||''}
 支払(42C): ${lc.term42C||''}
 国: ${lc.country||''}
 
-=== 過去SI実績（同じ取引先・同じ銀行・直近3ヶ月以内 ${recentSi.length}件）===
+=== 過去SI実績（${sourceLabel}）===
 ${siSummary}
 
 【出力ルール】
 - JSONのみ出力（前置き・説明・コードブロック不要）
-- 不明な値は「XX」で記入（空欄にしない）
-- noteには「LC条件と過去SIで異なった点」を具体的に記載
+- 完成した値を直接記入（「LCの〜を参照」等の説明文不可）
+- noteには「判断根拠と信頼度の説明」を日本語で記載
 
 {
-  "consignee": "LC 46A指定の荷受人（改行は\\nで表現）",
-  "notifyParty": "会社名のみ（住所・TEL・FAX含めない）",
-  "address": "住所・EMAIL・TAX ID等（過去SIの改行・表記形式を参考に）",
-  "tel": "TEL（過去SIの表記形式を参考に）",
-  "fax": "FAX（過去SIの表記形式を参考に）",
-  "paymentDeadline": "支払期限（LC 42C条件を守りつつ過去SI表現を参考に）",
-  "paymentTerms": "INCOTERMS含む支払条件（LC条件厳守）",
-  "pod1": "1st Port of Delivery",
-  "blText1": "BL Text1（PO番号・Licence番号等。LC条件厳守。不明はXX）",
-  "all": "全書類共通文句（LC 47A条件厳守）",
+  "consignee": "完成した荷受人（改行は\\nで表現）",
+  "notifyParty": "完成した会社名のみ（住所・TEL・FAX含めない）",
+  "address": "完成した住所・連絡先（過去SI書式を参考）",
+  "tel": "完成したTEL（過去SI表記形式）",
+  "fax": "完成したFAX（過去SI表記形式）",
+  "paymentDeadline": "完成した支払期限（LC 42C条件厳守）",
+  "paymentTerms": "完成したINDICATIONS含む支払条件",
+  "pod1": "完成した1st Port of Delivery",
+  "blText1": "完成したBL Text1（PO番号・Licence番号等）",
+  "all": "完成した全書類共通文句（LC 47A条件厳守）",
+  "confidence": "high / medium / low — 過去SI一致度",
+  "refSiNo": "参照に使用したSC番号（複数はカンマ区切り）",
   "improved": true,
-  "note": "LC条件と過去SIで異なった点・判断根拠（日本語で具体的に）"
+  "note": "判断根拠・信頼度の説明（日本語）"
 }`}]}],4000);
 
     const clean=raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
     const jm=clean.match(/\{[\s\S]*\}/);
-    if(!jm)return;
+    if(!jm) return;
     const ai=JSON.parse(jm[0]);
 
-    // 개선된 값으로 siVals 업데이트
-    if(ai.consignee)siVals.consignee=ai.consignee;
-    if(ai.notifyParty)siVals.notifyParty=ai.notifyParty;
-    if(ai.address)siVals.address=ai.address;
-    if(ai.tel)siVals.tel=ai.tel;
-    if(ai.fax)siVals.fax=ai.fax;
-    if(ai.paymentDeadline)siVals.paymentDeadline=ai.paymentDeadline;
-    if(ai.paymentTerms)siVals.paymentTerms=ai.paymentTerms;
-    if(ai.pod1)siVals.pod1=ai.pod1;
-    if(ai.blText1)siVals.blText1=ai.blText1;
-    if(ai.all)siVals.all=ai.all;
-    if(compVnMode&&siVals2){
-      if(ai.all)siVals2.all=ai.all;
-    }
+    if(ai.consignee)     siVals.consignee=ai.consignee;
+    if(ai.notifyParty)   siVals.notifyParty=ai.notifyParty;
+    if(ai.address)       siVals.address=ai.address;
+    if(ai.tel)           siVals.tel=ai.tel;
+    if(ai.fax)           siVals.fax=ai.fax;
+    if(ai.paymentDeadline) siVals.paymentDeadline=ai.paymentDeadline;
+    if(ai.paymentTerms)  siVals.paymentTerms=ai.paymentTerms;
+    if(ai.pod1)          siVals.pod1=ai.pod1;
+    if(ai.blText1)       siVals.blText1=ai.blText1;
+    if(ai.all)           siVals.all=ai.all;
+    if(compVnMode&&siVals2){ if(ai.all) siVals2.all=ai.all; }
     renderCompFormContent();
 
-    const refNos=recentSi.map(r=>r[CN_KEY]||'').filter(Boolean).join('、');
-    if(noteEl)noteEl.innerHTML=`<div class="alert alert-ok">✅ 過去SI参照で${recentSi.length}件のフォーマットを反映しました。<br>📋 参照SC No.: <span style="color:#86efac;font-weight:700;">${esc(refNos)}</span>${ai.note?'<br>📌 '+esc(ai.note):''}</div>`;
+    const confBadge=ai.confidence==='high'?'🟢 高':ai.confidence==='medium'?'🟡 中':ai.confidence==='low'?'🔴 低':'';
+    if(noteEl) noteEl.innerHTML=`<div class="alert alert-ok">✅ 完成SI作成完了 (${sourceLabel})<br>📋 参照: <span style="color:#86efac;font-weight:700;">${esc(ai.refSiNo||refNos)}</span> 信頼度: ${confBadge}${ai.note?'<br>📌 '+esc(ai.note):''}</div>`;
   }catch(e){
-    if(noteEl)noteEl.innerHTML=`<div class="alert alert-warn">⚠️ 過去SI参照に失敗しました。手動で確認してください。</div>`;
+    if(noteEl) noteEl.innerHTML=`<div class="alert alert-warn">⚠️ 過去SI参照に失敗しました。手動で確認してください。</div>`;
   }
 }
 function initTT(){
