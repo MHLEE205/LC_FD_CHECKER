@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.17 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.18 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -261,7 +261,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.17 (2026-06-10) | 過去SI 商品明細(s_i_detail) 表示追加</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.18 (2026-06-10) | TT/DP一覧 Dataverse直接照会 (Excelフォールバック維持)</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -270,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.17 (2026-06-10) | 過去SI 商品明細(s_i_detail) 表示追加</span>
+  <span>LEENEAR CORPORATION — v2.18 (2026-06-10) | TT/DP一覧 Dataverse直接照会 (Excelフォールバック維持)</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -458,7 +458,7 @@ select.fi{cursor:pointer;height:34px;}
       <div class="ct">📂 取引種別を選択</div>
       <div class="si-src-tabs" style="margin-bottom:0;">
         <div class="si-src-tab active" id="acl-src-lc" onclick="setAclSrc('lc')">🏦 LC取引<br><span style="font-size:.80rem;font-weight:400;">LC JSONを使用</span></div>
-        <div class="si-src-tab" id="acl-src-tt" onclick="setAclSrc('tt')">📄 TT / DP取引<br><span style="font-size:.80rem;font-weight:400;">COMPASS Excelを使用</span></div>
+        <div class="si-src-tab" id="acl-src-tt" onclick="setAclSrc('tt')">📄 TT / DP取引<br><span style="font-size:.80rem;font-weight:400;">COMPASS直接取得 / Excel</span></div>
       </div>
     </div>
 
@@ -480,7 +480,7 @@ select.fi{cursor:pointer;height:34px;}
         <div class="ct">📊 TT / DP 契約選択</div>
         <!-- SI_DATA 자동 로드 상태 표시 -->
         <div id="ttSiStatus" class="alert alert-info" style="margin-bottom:9px;">
-          💡 保存フォルダの <strong>(compass)SI_DATA.xlsx</strong> から自動読込します。
+          💡 COMPASS_SIタブでログイン済みの場合は自動取得します。未ログインの場合は保存フォルダの <strong>(compass)SI_DATA.xlsx</strong> を使用します。
         </div>
         <!-- 계약번호 선택 (자동) -->
         <div id="compassContractSel" style="margin-top:4px;">
@@ -2154,11 +2154,155 @@ function setAclSrc(src){
   document.getElementById('acl-src-tt').classList.toggle('active',src==='tt');
   document.getElementById('acl-lc-src').style.display=src==='lc'?'block':'none';
   document.getElementById('acl-tt-src').style.display=src==='tt'?'block':'none';
-  // 선택 초기화
   selLcAcl=null;compassSiData=null;selectedTtContract=null;
   updAclBtn();
-  // TT 모드 진입 시 자동으로 계약 목록 표시
-  if(src==='tt') renderTtContractList();
+
+  // TT/DP 탭 진입 시 Dataverse 자동 취득 (v2.18~)
+  if(src === 'tt') {
+    if(dvTokenValid()) {
+      fetchDvTtSiList();
+    } else if(!siRefLoaded || !siRefData.length) {
+      const statusEl = document.getElementById('ttSiStatus');
+      if(statusEl) {
+        statusEl.className = 'alert alert-info';
+        statusEl.innerHTML =
+          `💡 <strong>COMPASS_SIタブ</strong>でCOMPASSにログインすると自動取得できます。` +
+          `または保存フォルダに <strong>(compass)SI_DATA.xlsx</strong> を配置してください。`;
+      }
+    } else {
+      renderTtContractList();
+    }
+  }
+}
+
+async function fetchDvTtSiList() {
+  if(!dvTokenValid()) return false;
+
+  const statusEl = document.getElementById('ttSiStatus');
+  if(statusEl) {
+    statusEl.className = 'alert alert-info';
+    statusEl.innerHTML = '🔄 COMPASSからTT/DP案件を取得中...';
+  }
+
+  try {
+    const siFields = [
+      'cr49f_s_iid','cr49f_lc_no',
+      '_cr49f_sale_contract_id_value',
+      'crcf9_consignee','crcf9_notify_party','crcf9_address',
+      'crcf9_tel','crcf9_fax','crcf9_payment_deadline',
+      'cr49f_payment_terms','cr49f_payment_method',
+      'crcf9_place_of_delivery_1','crcf9_place_of_delivery_2',
+      'crcf9_bl_text1','crcf9_all','crcf9_invoicetext',
+      'crcf9_bencert_text','crcf9_remark',
+      'crcf9_payment_classification','crcf9_sino','createdon'
+    ].join(',');
+
+    const siData = await dvGet(
+      `cr49f_s_is?$filter=(crcf9_payment_classification eq 'TT'` +
+      ` or crcf9_payment_classification eq 'DP')` +
+      ` and crcf9_sino eq 1` +
+      `&$select=${siFields}&$orderby=createdon desc&$top=300`
+    );
+    const siList = siData.value || [];
+    if(!siList.length) {
+      if(statusEl) {
+        statusEl.className = 'alert alert-warn';
+        statusEl.innerHTML = '⚠️ COMPASSにTT/DP案件が見つかりませんでした';
+      }
+      return false;
+    }
+
+    // SC GUID → SC番号・契約日 並列取得
+    const scGuids = [...new Set(
+      siList.map(si => si['_cr49f_sale_contract_id_value']).filter(Boolean)
+    )];
+    const scMap = {};
+    await Promise.all(
+      scGuids.map(guid =>
+        dvGet(
+          `cr49f_sale_contracts(${guid})?$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date`
+        ).then(sc => {
+          scMap[guid] = {
+            no:   sc.cr49f_sale_contract_no || '',
+            date: sc.cr49f_sale_contract_date || '',
+          };
+        }).catch(() => {})
+      )
+    );
+
+    // s_i_detail 並列取得
+    const detailMap = {};
+    await Promise.all(
+      siList.map(si =>
+        dvGet(
+          `crcf9_s_i_details?$filter=_crcf9_s_i_id_value eq ${si.cr49f_s_iid}` +
+          `&$select=crcf9_productname,crcf9_weight,crcf9_price,crcf9_hs_code`
+        ).then(d => {
+          const rows = d.value || [];
+          if(rows.length) detailMap[si.cr49f_s_iid] = rows[0];
+        }).catch(() => {})
+      )
+    );
+
+    // Excel siRefData 形式に変換 (既存関数と完全互換)
+    const CN_KEY  = 'cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
+    const CL_KEY  = 'cr49f_s_i.crcf9_payment_classification';
+    const SINO_KEY= 'cr49f_s_i.crcf9_sino';
+    const NP_KEY  = 'cr49f_s_i.crcf9_notify_party';
+    const DATE_KEY= 'cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
+
+    const converted = siList.map(si => {
+      const scGuid = si['_cr49f_sale_contract_id_value'] || '';
+      const sc     = scMap[scGuid] || {};
+      const det    = detailMap[si.cr49f_s_iid] || {};
+      return {
+        [CN_KEY]:   sc.no,
+        [CL_KEY]:   si.crcf9_payment_classification || '',
+        [SINO_KEY]: String(si.crcf9_sino || '1'),
+        [NP_KEY]:   si.crcf9_notify_party || '',
+        [DATE_KEY]: sc.date,
+        'cr49f_s_i.crcf9_consignee':             si.crcf9_consignee || '',
+        'cr49f_s_i.crcf9_notify_party':           si.crcf9_notify_party || '',
+        'cr49f_s_i.crcf9_address':                si.crcf9_address || '',
+        'cr49f_s_i.crcf9_tel':                    si.crcf9_tel || '',
+        'cr49f_s_i.crcf9_fax':                    si.crcf9_fax || '',
+        'cr49f_s_i.crcf9_payment_deadline':        si.crcf9_payment_deadline || '',
+        'cr49f_s_i.cr49f_payment_terms':           si.cr49f_payment_terms || '',
+        'cr49f_s_i.cr49f_payment_method':          si.cr49f_payment_method || '',
+        'cr49f_s_i.crcf9_place_of_delivery_1':     si.crcf9_place_of_delivery_1 || '',
+        'cr49f_s_i.crcf9_place_of_delivery_2':     si.crcf9_place_of_delivery_2 || '',
+        'cr49f_s_i.crcf9_bl_text1':                si.crcf9_bl_text1 || '',
+        'cr49f_s_i.crcf9_all':                     si.crcf9_all || '',
+        'cr49f_s_i.crcf9_invoicetext':             si.crcf9_invoicetext || '',
+        'cr49f_s_i.crcf9_payment_classification':  si.crcf9_payment_classification || '',
+        'crcf9_productname': det.crcf9_productname || '',
+        'crcf9_weight':      det.crcf9_weight      || '',
+        'crcf9_price':       det.crcf9_price        || '',
+        'crcf9_hs_code':     det.crcf9_hs_code      || '',
+      };
+    });
+
+    siRefData   = converted;
+    siRefLoaded = true;
+
+    if(statusEl) {
+      statusEl.className = 'alert alert-ok';
+      statusEl.innerHTML =
+        `✅ COMPASS取得済み（${converted.length}件）— TT/DP案件を選択してください`;
+    }
+
+    renderTtContractList();
+    return true;
+
+  } catch(e) {
+    console.warn('fetchDvTtSiList error:', e.message);
+    if(statusEl) {
+      statusEl.className = 'alert alert-warn';
+      statusEl.innerHTML =
+        `⚠️ COMPASS取得失敗: ${e.message.slice(0,60)} — Excelをご利用ください`;
+    }
+    return false;
+  }
 }
 
 /* TT/DP 계약 목록 렌더링 — SI_DATA에서 자동 추출 */
