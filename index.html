@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.20 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.21 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -261,7 +261,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.20 (2026-06-15) | レンダリングバグ修正: マークダウン応答パース対応 / プロンプト出力形式強化</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.21 (2026-06-15) | マークダウン対策強化: 行単位クリーニング追加 / ACLプロンプト記法禁止文言追加</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -270,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.20 (2026-06-15) | レンダリングバグ修正: マークダウン応答パース対応 / プロンプト出力形式強化</span>
+  <span>LEENEAR CORPORATION — v2.21 (2026-06-15) | マークダウン対策強化: 行単位クリーニング追加 / ACLプロンプト記法禁止文言追加</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -2649,6 +2649,7 @@ ${baseInfo}
 【出力フォーマット — 厳守】
 ⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 CHECK-番号|判定|グループ|項目名|確認内容
+★ CHECK行はパイプ区切り形式のみ。マークダウン記法（**等）は絶対使用禁止。
 ★ OKの場合: 「ACL記載: [実際の内容]」/ NGの場合: 「基準: [X] / ACL記載: [Y]」/ WARNの場合: 「[具体的な要確認内容]」
 ★ 「確認済み」「チェック済み」などの無意味な記載は絶対禁止
 ★ CHECK行はSUMMARYより前に全て出力すること
@@ -3185,7 +3186,7 @@ function parseCheckLines(raw){
     .replace(/^[-*]\s+(CHECK-)/gm,'$1'); // - CHECK- / * CHECK- → CHECK-
   function inferCat(no){const u=no.toUpperCase();return u.startsWith('A')?'GroupA':u.startsWith('B')?'GroupB':u.startsWith('C')?'GroupC':'その他';}
   for(const line of cleaned.split('\n')){
-    const t=line.trim();
+    const t=line.trim().replace(/^\*+/,'').replace(/\*+$/,'').replace(/^\s*-\s*/,'').trim();
     // 정규 포맷: CHECK-A1|OK|GroupA|항목명|내용
     const m=t.match(/^CHECK-([A-Z]?\d+)\s*\|\s*(OK|NG|WARN)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.*)/i);
     if(m){
