@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.19 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.20 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -261,7 +261,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.19 (2026-06-15) | ACLチェック精度改善: B7/B8コンテナ番号キー照合 / A12 Way Bill対応 / A13削除 / B1 WARN化</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.20 (2026-06-15) | レンダリングバグ修正: マークダウン応答パース対応 / プロンプト出力形式強化</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -270,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.19 (2026-06-15) | ACLチェック精度改善: B7/B8コンテナ番号キー照合 / A12 Way Bill対応 / A13削除 / B1 WARN化</span>
+  <span>LEENEAR CORPORATION — v2.20 (2026-06-15) | レンダリングバグ修正: マークダウン応答パース対応 / プロンプト出力形式強化</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -2005,6 +2005,7 @@ ${cNote}
 
 【重要】以下の各項目を必ず1行1項目で出力してください。
 出力フォーマット（厳守）:
+⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 CHECK-番号|判定|カテゴリ|項目名|確認内容
 
 判定は必ず OK / NG / WARN のいずれか1つ。
@@ -2081,6 +2082,7 @@ ${lcInfo}
 
 【重要】以下の各項目を必ず1行1項目で出力してください。
 出力フォーマット（厳守）:
+⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 CHECK-番号|判定|カテゴリ|項目名|確認内容
 
 判定は必ず OK / NG / WARN のいずれか1つ。省略・まとめ禁止。
@@ -2645,6 +2647,7 @@ ${baseInfo}
 === Invoice No: ${invNo} | 対象国: ${country} ===
 
 【出力フォーマット — 厳守】
+⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 CHECK-番号|判定|グループ|項目名|確認内容
 ★ OKの場合: 「ACL記載: [実際の内容]」/ NGの場合: 「基準: [X] / ACL記載: [Y]」/ WARNの場合: 「[具体的な要確認内容]」
 ★ 「確認済み」「チェック済み」などの無意味な記載は絶対禁止
@@ -2887,6 +2890,7 @@ ${BL_RULES}
 ${aclDataSummary}
 
 【出力フォーマット — 厳守】
+⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 CHECK-番号|判定|グループ|項目名|確認内容
 
 ★★★ 絶対ルール ★★★
@@ -2917,6 +2921,7 @@ ${aclDataSummary}
 ${lcConditions}
 
 【出力フォーマット — 厳守】
+⚠️ マークダウン(**, ##, *, -)は絶対に使用しないこと。CHECK行は必ずパイプ(|)区切り形式のみで出力すること。
 各チェック項目を必ず以下の1行形式で出力してください:
 CHECK-番号|判定|グループ|項目名|確認内容
 
@@ -3172,7 +3177,14 @@ function resetBlCheck(){
 function parseCheckLines(raw){
   const items=[];
   const seen=new Set();
-  for(const line of raw.split('\n')){
+  // マークダウン前処理: AI がマークダウン形式で返した場合も吸収する
+  const cleaned=raw
+    .replace(/\*\*([^*]+)\*\*/g,'$1')   // **bold** → bold
+    .replace(/\*([^*\n]+)\*/g,'$1')      // *italic* → italic
+    .replace(/^#{1,6}\s+/gm,'')          // ## ヘッダー削除
+    .replace(/^[-*]\s+(CHECK-)/gm,'$1'); // - CHECK- / * CHECK- → CHECK-
+  function inferCat(no){const u=no.toUpperCase();return u.startsWith('A')?'GroupA':u.startsWith('B')?'GroupB':u.startsWith('C')?'GroupC':'その他';}
+  for(const line of cleaned.split('\n')){
     const t=line.trim();
     // 정규 포맷: CHECK-A1|OK|GroupA|항목명|내용
     const m=t.match(/^CHECK-([A-Z]?\d+)\s*\|\s*(OK|NG|WARN)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.*)/i);
@@ -3181,16 +3193,37 @@ function parseCheckLines(raw){
       if(!seen.has(key)){seen.add(key);items.push({no:m[1],st:m[2].toUpperCase(),cat:m[3].trim(),title:m[4].trim(),detail:m[5].trim()});}
       continue;
     }
-    // 폴백: SUMMARY 안의 CHECK-A1 (NG): 형식
+    // 폴백1: SUMMARY 안의 CHECK-A1 (NG): 형식
     const m2=t.match(/CHECK-([A-Z]?\d+)\s*\((OK|NG|WARN)\):\s*(.*)/i);
     if(m2){
       const key=m2[1].toUpperCase();
       if(!seen.has(key)){
         seen.add(key);
-        // 카테고리 추정
-        const no=m2[1].toUpperCase();
-        const cat=no.startsWith('A')?'GroupA':no.startsWith('B')?'GroupB':no.startsWith('C')?'GroupC':'その他';
-        items.push({no:m2[1],st:m2[2].toUpperCase(),cat,title:m2[3].split(':')[0].trim()||no,detail:m2[3].trim()});
+        const cat=inferCat(m2[1]);
+        items.push({no:m2[1],st:m2[2].toUpperCase(),cat,title:m2[3].split(':')[0].trim()||m2[1],detail:m2[3].trim()});
+      }
+      continue;
+    }
+    // 폴백2: CHECK-A1: OK — title — detail  / CHECK-A1 → OK : title
+    const m4=t.match(/CHECK-([A-Z]?\d+)\s*[:\→→]\s*(OK|NG|WARN)\s*[:\-—]\s*(.*)/i);
+    if(m4){
+      const key=m4[1].toUpperCase();
+      if(!seen.has(key)){
+        seen.add(key);
+        const cat=inferCat(m4[1]);
+        const rest=m4[3].split(/[:\-—]/);
+        items.push({no:m4[1],st:m4[2].toUpperCase(),cat,title:(rest[0]||m4[1]).trim(),detail:(rest.slice(1).join(' ')||'').trim()});
+      }
+      continue;
+    }
+    // 폴백3: CHECK-A1 OK title (공백만으로 구분)
+    const m5=t.match(/^CHECK-([A-Z]?\d+)\s+(OK|NG|WARN)\s+(.*)/i);
+    if(m5){
+      const key=m5[1].toUpperCase();
+      if(!seen.has(key)){
+        seen.add(key);
+        const cat=inferCat(m5[1]);
+        items.push({no:m5[1],st:m5[2].toUpperCase(),cat,title:m5[3].split(':')[0].trim()||m5[1],detail:m5[3].trim()});
       }
       continue;
     }
