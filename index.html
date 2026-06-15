@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.18 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.19 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -261,7 +261,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.18 (2026-06-10) | TT/DP一覧 Dataverse直接照会 (Excelフォールバック維持)</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.19 (2026-06-15) | ACLチェック精度改善: B7/B8コンテナ番号キー照合 / A12 Way Bill対応 / A13削除 / B1 WARN化</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -270,7 +270,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.18 (2026-06-10) | TT/DP一覧 Dataverse直接照会 (Excelフォールバック維持)</span>
+  <span>LEENEAR CORPORATION — v2.19 (2026-06-15) | ACLチェック精度改善: B7/B8コンテナ番号キー照合 / A12 Way Bill対応 / A13削除 / B1 WARN化</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -2157,7 +2157,7 @@ function setAclSrc(src){
   selLcAcl=null;compassSiData=null;selectedTtContract=null;
   updAclBtn();
 
-  // TT/DP 탭 진입 시 Dataverse 자동 취득 (v2.18~)
+  // TT/DP 탭 진입 시 Dataverse 자동 취득 (v2.19~)
   if(src === 'tt') {
     if(dvTokenValid()) {
       fetchDvTtSiList();
@@ -2605,8 +2605,7 @@ CHECK-A8|判定|GroupA|HS Code|${country==='INDONESIA'?'インドネシア向け
 CHECK-A9|判定|GroupA|Import Licence No.|${country==='INDONESIA'?'LC/47A指定番号との照合':'該当なし→OK'} / ACL記載:[実際の番号または記載なし]
 CHECK-A10|判定|GroupA|Freight条件|LC要求:FREIGHT PREPAID AS ARRANGED / ACL記載:[実際の記載内容]
 CHECK-A11|判定|GroupA|Partial/Transhipment|LC 43P:${lcMeta?.partialShipment||'不明'}・43T:${lcMeta?.transhipment||'不明'} / ACL記載:[実際の積み方・経由有無]
-CHECK-A12|判定|GroupA|Original B/L通数|LC要求通数:3通(通常) / ACL記載:[実際の記載通数または記載なし]
-CHECK-A13|判定|GroupA|FCL/CY条件|LC要求:FCL/FCL CY/CY / ACL記載:[実際の記載内容]`;
+CHECK-A12|判定|GroupA|Original B/L通数|ACLが「Way Bill」の場合はOK（通数概念なし）。Ocean B/Lの場合のみLC要求通数と照合:[実際の記載通数または記載なし]`;
 
     const groupA_TT=`【Group A — ACL ↔ SI基準データ 比較】ACLが間違っていればNG（ACLを修正）
 ※ TT/DP取引のためL/C No.チェックはスキップ
@@ -2621,8 +2620,7 @@ CHECK-A8|判定|GroupA|HS Code|SI基準:「${ttSnap?.hsCode||''}」 / ACL記載:
 CHECK-A9|判定|GroupA|Import Licence No.|${country==='INDONESIA'?'SI基準のcrcf9_allから確認':'該当なし→OK'} / ACL記載:[実際の番号または記載なし]
 CHECK-A10|判定|GroupA|Freight条件|FREIGHT PREPAID AS ARRANGED / ACL記載:[実際の記載内容]
 CHECK-A11|判定|GroupA|Partial/Transhipment|ACL記載:[実際の積み方・経由有無] → 問題なければOK
-CHECK-A12|判定|GroupA|Original B/L通数|通常3通 / ACL記載:[実際の記載通数または記載なし]
-CHECK-A13|判定|GroupA|FCL/CY条件|FCL/FCL CY/CY / ACL記載:[実際の記載内容]`;
+CHECK-A12|判定|GroupA|Original B/L通数|ACLが「Way Bill」の場合はOK（通数概念なし）。Ocean B/Lの場合のみ通常3通と照合:[実際の記載通数または記載なし]`;
 
     const groupC_LC=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] / LC最終船積日:${lcMeta?.latestShipment||'不明'} → [判定理由]`;
     const groupC_TT=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] → 記載があればOK（TT/DPのため期限なし）`;
@@ -2655,14 +2653,14 @@ CHECK-番号|判定|グループ|項目名|確認内容
 ${isLcMode?groupA_LC:groupA_TT}
 
 【Group B — ACL ↔ IV/PL 比較】ACLが真実、不一致はIV/PLが間違い
-CHECK-B1|判定|GroupB|コンテナ番号|ACL:[コンテナ番号リスト] / IV/PL:[コンテナ番号リスト] → 一致または[不一致の場合 ⚠️IV/PLを修正:具体的な差異]
+CHECK-B1|判定|GroupB|コンテナ番号|ACL:[コンテナ番号リスト] / IV/PL:[コンテナ番号リスト] → 番号セットが一致すればOK。Partial番号の順序違いはWARN（要確認）。番号自体が違う場合のみNG
 CHECK-B2|判定|GroupB|Seal番号|ACL:[Seal番号リスト] / IV/PL:[Seal番号リスト] → 一致または[不一致の場合 ⚠️IV/PLを修正:具体的な差異]
 CHECK-B3|判定|GroupB|船名|ACL:[船名] / IV/PL:[船名] → 一致または[不一致の場合 ⚠️IV/PLを修正]
 CHECK-B4|判定|GroupB|総Bale数|ACL:[数量] / IV:[数量] / PL:[数量] → 一致または[不一致の場合 ⚠️IV/PLを修正]
 CHECK-B5|判定|GroupB|総重量(MT)|ACL:[重量] / IV:[重量] / PL:[重量] → 一致または[不一致の場合 ⚠️IV/PLを修正]
 CHECK-B6|判定|GroupB|コンテナ数|ACL:[数] / IV/PL:[数] → 一致または[不一致の場合 ⚠️IV/PLを修正]
-CHECK-B7|判定|GroupB|各コンテナBale数|全コンテナPL・ACL一致:[各コンテナのBale数を列挙] または[不一致の場合 ⚠️PLを修正:具体的差異]
-CHECK-B8|判定|GroupB|各コンテナ重量|全コンテナPL・ACL一致:[各コンテナの重量を列挙] または[不一致の場合 ⚠️PLを修正:具体的差異]
+CHECK-B7|判定|GroupB|各コンテナBale数|必ずコンテナ番号をキーに照合すること（Partial番号順序は無視）。ACLの各コンテナ番号に対応するPLの行を探して比較。全一致:OK / 不一致コンテナあり:NG [コンテナ番号: ACL=[X]Bales / PL=[Y]Bales の形式で列挙]
+CHECK-B8|判定|GroupB|各コンテナ重量|必ずコンテナ番号をキーに照合すること（Partial番号順序は無視）。ACLの各コンテナ番号に対応するPLの行を探して比較。全一致:OK / 不一致コンテナあり:NG [コンテナ番号: ACL=[X]MT / PL=[Y]MT の形式で列挙]
 
 【Group C — ACL単独確認】
 ${isLcMode?groupC_LC:groupC_TT}
