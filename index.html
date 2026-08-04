@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.24 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.25 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -263,7 +263,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.24 (2026-08-04) | SP安定化: トークン自動更新・全件ページング・429リトライ・手動Excel復旧</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.25 (2026-08-04) | SP高速化: 並列取得・差分同期キャッシュ・進捗表示</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -272,7 +272,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.24 (2026-08-04) | SP安定化: トークン自動更新・全件ページング・429リトライ・手動Excel復旧</span>
+  <span>LEENEAR CORPORATION — v2.25 (2026-08-04) | SP高速化: 並列取得・差分同期キャッシュ・進捗表示</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -1039,6 +1039,31 @@ async function graphList(spPath){
   }
   return out;
 }
+/* v2.25: 同時実行数を制限した並列マップ（順次実行による待ち時間を短縮） */
+const SP_CONCURRENCY = 6;   // 読み取り同時数
+const SP_WRITE_CONC  = 3;   // 書き込み同時数（PUTはスロットリングされやすいため低め）
+async function mapLimit(list, limit, fn){
+  const out=new Array(list.length);
+  let cursor=0;
+  const worker=async()=>{
+    for(;;){
+      const i=cursor++;
+      if(i>=list.length) return;
+      try{ out[i]=await fn(list[i], i); }
+      catch(e){ console.warn('mapLimit エラー:',e); out[i]=null; }
+    }
+  };
+  const n=Math.min(limit, list.length);
+  if(n>0) await Promise.all(Array.from({length:n}, worker));
+  return out;
+}
+
+/* v2.25: lastModifiedDateTime による差分同期インデックス
+   （本体は lcMap 側に保存済みのため、ここではファイル名→更新時刻・LC idのみ保持） */
+const SPIDX='leenai_sp_idx_v1';
+function loadSpIdx(){ try{ return JSON.parse(localStorage.getItem(SPIDX))||{}; }catch(e){ return {}; } }
+function saveSpIdx(ix){ try{ localStorage.setItem(SPIDX, JSON.stringify(ix)); }catch(e){ console.warn('SPインデックス保存失敗:',e); } }
+
 /* v2.24: ファイル取得の共通化 */
 async function graphGetJson(spPath){
   const res=await graphFetch(`${spItemUrl(spPath)}:/content`,{headers:{'Accept':'application/json'}});
@@ -1202,35 +1227,65 @@ async function syncFromSP(silent=false){
           siRefData=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
           siRefLoaded=true;
           renderTtContractList();
+          updateSpStatus('⟳ TT/DP データ確認中...');
           await autoGenerateTtJson(items);   // v2.24: 取得済みリストを再利用（LIST重複呼び出し回避）
         }
       }catch(e){console.warn('SI_DATA読込エラー:',e);}
     }
-    // LC JSON 파일 로드
-    for(const item of items){
-      if(!item.name.endsWith('.json'))continue;
-      if(item.name.includes('_ACL_')||item.name.includes('_SI_')||
-         item.name.includes('_BL_')||item.name.includes('_TT_BASE'))continue;
-      try{
-        const data=await graphGetJson(`${SP_PATH_LC}/${item.name}`);
-        if(data){
-          const arr=Array.isArray(data)?data:[data];
-          arr.forEach(lc=>{
-            if(lc&&lc.lcNo){
-              lcMap[lc.id||lc.lcNo]=lc;
-              importedLcMap[lc.id||lc.lcNo]=lc;
-              count++;
-            }
-          });
-        }
-      }catch(e){console.warn('LC JSON読込エラー:',item.name,e);}
+
+    /* v2.25: LC JSON を並列取得 + 未更新ファイルはスキップ + 進捗表示 */
+    const spIdx=loadSpIdx();
+    const targets=items.filter(it=>
+      it.name.endsWith('.json') &&
+      !it.name.includes('_ACL_') && !it.name.includes('_SI_') &&
+      !it.name.includes('_BL_')  && !it.name.includes('_TT_BASE')
+    );
+    const total=targets.length;
+    let done=0, cacheHit=0;
+    const tick=()=>{
+      done++;
+      if(done===total||done%3===0) updateSpStatus(`⟳ SharePoint同期中... ${done}/${total}`);
+    };
+
+    const results=await mapLimit(targets, SP_CONCURRENCY, async(item)=>{
+      const c=spIdx[item.name];
+      // 更新時刻が一致し、対象LCがすべて手元にあるなら再ダウンロード不要
+      if(c && c.mtime===item.lastModifiedDateTime && Array.isArray(c.ids) && c.ids.length
+         && c.ids.every(id=>lcMap[id])){
+        cacheHit++; tick();
+        return {name:item.name, mtime:c.mtime, ids:c.ids, cached:true};
+      }
+      const data=await graphGetJson(`${SP_PATH_LC}/${item.name}`);
+      tick();
+      if(!data) return null;
+      const arr=Array.isArray(data)?data:[data];
+      return {name:item.name, mtime:item.lastModifiedDateTime, lcs:arr.filter(x=>x&&x.lcNo), cached:false};
+    });
+
+    const nextIdx={};
+    for(const r of results){
+      if(!r) continue;
+      if(r.cached){
+        r.ids.forEach(id=>{ importedLcMap[id]=lcMap[id]; });
+        nextIdx[r.name]={mtime:r.mtime, ids:r.ids};
+        count+=r.ids.length;
+      }else{
+        const ids=[];
+        r.lcs.forEach(lc=>{
+          const id=lc.id||lc.lcNo;
+          lcMap[id]=lc; importedLcMap[id]=lc; ids.push(id); count++;
+        });
+        nextIdx[r.name]={mtime:r.mtime, ids};
+      }
     }
+    saveSpIdx(nextIdx);
+
     saveLcToStorage();
     renderLcRegList();
     renderSelList('fdLcList','fd');
     renderSelList('siLcList','acl');
     renderSelList('compLcList','comp');
-    updateSpStatus(`☁️ SharePoint 接続済 — ${count}件 のLCを読込`);
+    updateSpStatus(`☁️ SharePoint 接続済 — ${count}件 のLCを読込${cacheHit?`（うちキャッシュ ${cacheHit}件）`:''}`);
     return count;
   }catch(e){
     updateSpStatus('❌ SP同期エラー: '+e.message,false);
@@ -1252,22 +1307,21 @@ async function autoGenerateTtJson(knownItems){
   const ttRows=siRefData.filter(r=>(r[CL_KEY]==='TT'||r[CL_KEY]==='DP')&&String(r[SINO_KEY])==='1');
   if(!ttRows.length)return;
 
-  // 기존 SP 내 _TT_BASE.json 목록 수집
+  // 기존 SP 내 _TT_BASE.json 목록 수집 (v2.25: 並列取得)
   const existingFiles={};
   try{
     const items=knownItems||await graphList(SP_PATH_LC);
-    for(const item of items){
-      if(!item.name.endsWith('_TT_BASE.json'))continue;
-      try{
-        const data=await graphGetJson(`${SP_PATH_LC}/${item.name}`);
-        if(data&&data.contractNo) existingFiles[data.contractNo]=data;
-      }catch(e){}
-    }
+    const ttFiles=items.filter(it=>it.name.endsWith('_TT_BASE.json'));
+    const datas=await mapLimit(ttFiles, SP_CONCURRENCY,
+      it=>graphGetJson(`${SP_PATH_LC}/${it.name}`));
+    datas.forEach(d=>{ if(d&&d.contractNo) existingFiles[d.contractNo]=d; });
   }catch(e){}
 
   const today=new Date();
   let newCount=0,updateCount=0,skipCount=0;
 
+  // v2.25: 書き込み対象を先に洗い出してから並列PUT
+  const toWrite=[];
   for(const row of ttRows){
     const cn=row[CN_KEY];
     if(!cn)continue;
@@ -1276,16 +1330,19 @@ async function autoGenerateTtJson(knownItems){
     const diffDays=(today-cDate)/(1000*60*60*24);
     const within1Month=diffDays<=31;
 
+    // v2.24: 中身が変わっていない場合はPUTしない（ログイン毎の書き込み集中を防止）
     if(existingFiles[cn]){
-      // v2.24: 中身が変わっていない場合はPUTしない（ログイン毎の書き込み集中を防止）
-      if(within1Month){
-        if(await writeTtBaseJson(cn,row,siRefData,existingFiles[cn])) updateCount++;
-        else skipCount++;
-      }
+      if(within1Month) toWrite.push({cn,row,existing:existingFiles[cn]});
     }else{
-      if(await writeTtBaseJson(cn,row,siRefData,null)) newCount++;
+      toWrite.push({cn,row,existing:null});
     }
   }
+  const written=await mapLimit(toWrite, SP_WRITE_CONC,
+    t=>writeTtBaseJson(t.cn,t.row,siRefData,t.existing));
+  written.forEach((ok,i)=>{
+    if(ok) toWrite[i].existing?updateCount++:newCount++;
+    else if(toWrite[i].existing) skipCount++;
+  });
   if(newCount||updateCount){
     console.log(`TT/DP JSON: 新規${newCount}件 / 更新${updateCount}件 / 変更なし${skipCount}件`);
   }
