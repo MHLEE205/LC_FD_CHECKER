@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ja" data-theme="dark">
+<html lang="ja" data-theme="leenai">
 <head>
 <script>
   if (location.search.includes('code=')) {
@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.25 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.23 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -25,10 +25,20 @@
   --shadow:0 4px 24px rgba(0,0,0,.35);
 }
 [data-theme="light"]{
-  --bg:#f4f6fb;--surface:#ffffff;--surface2:#f0f4ff;--surface3:#e8edf7;
-  --border:#d1d5db;--border2:#c4cad5;
-  --text:#111827;--sub:#6b7280;--sub2:#9ca3af;
-  --shadow:0 4px 24px rgba(0,0,0,.10);
+  --bg:#FAF9F8;--surface:#FFFFFF;--surface2:#F3F2F1;--surface3:#EDEBE9;
+  --border:#E1DFDD;
+  --text:#201F1E;--text2:#605E5C;--text3:#A19F9D;
+  --accent:#0F6CBD;
+}
+[data-theme="leenai"] {
+  --bg:#E9EEE8; --surface:#F4F5F7; --surface2:#E1E8E0; --surface3:#D5DFD3;
+  --border:#B9C7B7; --text:#1F2A22; --text2:#4F5E52; --text3:#6D7B71;
+  --accent:#2F6B45; --accent2:#3F6FA8;
+}
+[data-theme="focus"] {
+  --bg:#E7EAF0; --surface:#F4F5F7; --surface2:#DDE2EA; --surface3:#CFD6E2;
+  --border:#AEB8C8; --text:#202733; --text2:#515C6C; --text3:#697587;
+  --accent:#315F9E; --accent2:#2F7D6A;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:14px 12px 90px;max-width:1200px;margin:0 auto;}
@@ -263,7 +273,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.25 (2026-08-04) | SP高速化: 並列取得・差分同期キャッシュ・進捗表示</div>
+  <div style="font-size:13px;color:#8892a4;font-weight:500;">LEENEAR CORPORATION — v2.23 (2026-08-04) | SharePoint統合: ローカルフォルダ廃止→SP保存/読込</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -272,7 +282,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.25 (2026-08-04) | SP高速化: 並列取得・差分同期キャッシュ・進捗表示</span>
+  <span>LEENEAR CORPORATION — v2.23 (2026-08-04) | SharePoint統合: ローカルフォルダ廃止→SP保存/読込</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -312,7 +322,7 @@ select.fi{cursor:pointer;height:34px;}
 <div class="panel active" id="tab-lc">
   <div class="card">
     <div class="ct">📋 登録済みLC</div>
-    <div class="export-bar-top">💡 <strong>Outlookログイン</strong>後はLC分析完了時にSharePointへ自動保存。FD・SI・SI入力画面でも同じSharePointから自動読込。</div>
+    <div class="export-bar-top">💡 <strong>フォルダ選択</strong>後はLC分析完了時に自動保存。FD・SI・SI入力画面でも同フォルダから自動読込可能。</div>
     <div class="btn-row">
       <button class="btn btn-s" onclick="exportLc()" style="background:rgba(79,124,255,.12);border-color:rgba(79,124,255,.3);color:#93c5fd">📥 JSON書き出し（個別ファイル）</button>
       <button class="btn btn-s" onclick="document.getElementById('importFile').click()" style="background:rgba(124,79,255,.12);border-color:rgba(124,79,255,.3);color:#a78bfa">📂 JSON読み込み</button>
@@ -478,7 +488,7 @@ select.fi{cursor:pointer;height:34px;}
         <div class="ct">📊 TT / DP 契約選択</div>
         <!-- SI_DATA 자동 로드 상태 표시 -->
         <div id="ttSiStatus" class="alert alert-info" style="margin-bottom:9px;">
-          💡 COMPASS_SIタブでログイン済みの場合は自動取得します。未ログインの場合はSharePoint上の <strong>(compass)SI_DATA.xlsx</strong> を使用します。
+          💡 COMPASS_SIタブでログイン済みの場合は自動取得します。未ログインの場合は保存フォルダの <strong>(compass)SI_DATA.xlsx</strong> を使用します。
         </div>
         <!-- 계약번호 선택 (자동) -->
         <div id="compassContractSel" style="margin-top:4px;">
@@ -486,7 +496,7 @@ select.fi{cursor:pointer;height:34px;}
             <input type="text" id="ttContractSearch" placeholder="契約番号で検索..." oninput="renderTtContractList()" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 9px;font-size:.82rem;outline:none;">
           </div>
           <div id="ttContractList" style="max-height:200px;overflow-y:auto;">
-            <div class="empty">Outlookログイン後に自動取得します</div>
+            <div class="empty">保存フォルダを設定してください</div>
           </div>
           <div id="compassSiPreview" style="display:none;margin-top:8px;background:rgba(13,148,136,.06);border:1px solid rgba(13,148,136,.2);border-radius:8px;padding:9px 12px;font-size:.78rem;line-height:1.8;"></div>
         </div>
@@ -634,7 +644,7 @@ select.fi{cursor:pointer;height:34px;}
         <div class="si-src-tab" id="comp-tab-tt" onclick="compSetSrc('tt')">📄 TT / DP<br><span style="font-size:.80rem;font-weight:400;">販売契約書から手動入力</span></div>
       </div>
       <div id="comp-lc-src">
-        <div class="alert alert-info">💡 ① LC分析タブで分析済みのLCを選択するか、SharePointから読み込んでください。</div>
+        <div class="alert alert-info">💡 ① LC分析タブで分析済みのLCを選択するか、フォルダから読み込んでください。</div>
         <button class="btn btn-s" onclick="loadFromSP()" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#86efac;font-size:.80rem;padding:6px 10px;margin-bottom:8px;">🔄 SPから読込</button>
         <div class="search-row" style="margin-bottom:8px;">
           <input type="text" id="compLcSearch" placeholder="契約番号 / LC番号で検索..." oninput="renderSelList('compLcList','comp')" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 9px;font-size:.82rem;outline:none;">
@@ -765,7 +775,6 @@ const OAUTH_CFG = {
   redirectUri: 'https://mhlee205.github.io/LC_FD_CHECKER/'
 };
 let loggedIn = false, loggedInUser = '', accessToken = '';
-let refreshToken = '', tokenExpiry = 0;   // v2.24: トークン自動更新用
 
 function _b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
 async function _sha256(s){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
@@ -785,8 +794,6 @@ async function startOAuthFlow(){
         const t = await r.json();
         if (t.error) throw new Error(t.error_description || t.error);
         accessToken = t.access_token;
-        refreshToken = t.refresh_token || '';
-        tokenExpiry  = Date.now() + ((t.expires_in || 3600) * 1000);
         const u = await (await fetch('https://graph.microsoft.com/v1.0/me', {headers:{Authorization:'Bearer '+accessToken}})).json();
         loggedIn = true; loggedInUser = u.displayName || u.mail || u.userPrincipalName;
         updateAuthUI(true, loggedInUser); resolve();
@@ -797,28 +804,8 @@ async function startOAuthFlow(){
   });
 }
 function toggleAuth(){
-  if (loggedIn){ loggedIn=false; loggedInUser=''; accessToken=''; refreshToken=''; tokenExpiry=0; updateAuthUI(false); }
+  if (loggedIn){ loggedIn=false; loggedInUser=''; accessToken=''; updateAuthUI(false); }
   else { startOAuthFlow().catch(e => { if (e.message!=='CANCELLED') console.error(e); }); }
-}
-/* v2.24: refresh_token でアクセストークンを更新（失敗時は再ログインを促す） */
-async function refreshGraphToken(){
-  if (!refreshToken) return false;
-  try {
-    const body = new URLSearchParams({ client_id:OAUTH_CFG.clientId, grant_type:'refresh_token', refresh_token:refreshToken, scope:OAUTH_CFG.scopes });
-    const r = await fetch(`https://login.microsoftonline.com/${OAUTH_CFG.tenantId}/oauth2/v2.0/token`, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-    const t = await r.json();
-    if (t.error || !t.access_token) throw new Error(t.error_description || t.error || 'refresh failed');
-    accessToken = t.access_token;
-    if (t.refresh_token) refreshToken = t.refresh_token;
-    tokenExpiry = Date.now() + ((t.expires_in || 3600) * 1000);
-    return true;
-  } catch(e){
-    console.warn('トークン更新エラー:', e);
-    accessToken=''; refreshToken=''; tokenExpiry=0; loggedIn=false; loggedInUser='';
-    updateAuthUI(false);
-    updateSpStatus('⚠ セッションの有効期限が切れました。再度Outlookログインしてください。', false);
-    return false;
-  }
 }
 function updateAuthUI(isLoggedIn, user){
   const st = document.getElementById('authStatus');
@@ -976,104 +963,51 @@ async function handleDvCallback() {
 
 
 /* ============================================================
-   SECTION: SHAREPOINT — Graph API (v2.23 / 安定化 v2.24)
+   SECTION: SHAREPOINT — Graph API (v2.23)
 ============================================================ */
 const SP_DRIVE_ID = 'b!ZK58_9YllU-vETQD3Xz0TbOInXbVCXJHnQ2280KJBArFLeM_18EgRbSeoO-TW__U';
 const GRAPH_BASE  = 'https://graph.microsoft.com/v1.0/';
 const SP_PATH_LC  = '古紙/-. AI 活用/D-01-LC_FD_CHECKER';
 const SP_PATH_HIST= '古紙/-. AI 活用/D-01-LC_FD_CHECKER/履歴';
 
-const spEnc=p=>p.split('/').map(encodeURIComponent).join('/');
-const spItemUrl=p=>`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${spEnc(p)}`;
-
-/* v2.24: 期限前にトークンを先回り更新 */
-async function ensureGraphToken(){
-  if(!accessToken) throw new Error('Graph未認証');
-  if(tokenExpiry && Date.now() > tokenExpiry - 120000) await refreshGraphToken();
-  if(!accessToken) throw new Error('Graph未認証');
-}
-/* v2.24: 共通fetch — 401でトークン更新して1回再試行 / 429・5xxはRetry-After尊重で最大3回リトライ */
-async function graphFetch(url, opts={}, _retry=0){
-  await ensureGraphToken();
-  const headers=Object.assign({'Authorization':`Bearer ${accessToken}`}, opts.headers||{});
-  const res=await fetch(url, Object.assign({}, opts, {headers}));
-  if(res.status===401 && _retry===0 && refreshToken){
-    if(await refreshGraphToken()) return graphFetch(url, opts, 1);
-  }
-  if((res.status===429 || res.status>=500) && _retry<3){
-    const ra=parseInt(res.headers.get('Retry-After')||'',10);
-    const wait=Number.isFinite(ra)?Math.min(ra*1000,30000):Math.min(8000,1000*Math.pow(2,_retry));
-    await new Promise(r=>setTimeout(r,wait));
-    return graphFetch(url, opts, _retry+1);
-  }
-  return res;
-}
-async function graphThrow(res,label){
-  const e=await res.json().catch(()=>({}));
-  throw new Error(`${label} ${res.status}: ${e?.error?.message||res.statusText}`);
-}
 async function graphGet(path){
-  const res=await graphFetch(`${GRAPH_BASE}${path}`,{headers:{'Accept':'application/json'}});
-  if(!res.ok) await graphThrow(res,'Graph');
+  if(!accessToken) throw new Error('Graph未認証');
+  const res=await fetch(`${GRAPH_BASE}${path}`,{
+    headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}
+  });
+  if(!res.ok){
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`Graph ${res.status}: ${e?.error?.message||res.statusText}`);
+  }
   return res.json();
 }
 async function graphPut(spPath, data){
+  if(!accessToken) throw new Error('Graph未認証');
+  const encoded=spPath.split('/').map(encodeURIComponent).join('/');
   const body=typeof data==='string'?data:JSON.stringify(data,null,2);
-  const res=await graphFetch(`${spItemUrl(spPath)}:/content`,{
-    method:'PUT', headers:{'Content-Type':'application/json'}, body
+  const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/content`,{
+    method:'PUT',
+    headers:{'Authorization':`Bearer ${accessToken}`,'Content-Type':'application/json'},
+    body
   });
-  if(!res.ok) await graphThrow(res,'Graph PUT');
+  if(!res.ok){
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`Graph PUT ${res.status}: ${e?.error?.message||res.statusText}`);
+  }
   return res.json();
 }
-/* v2.24: @odata.nextLink を辿って全件取得（200件超のフォルダでも欠落しない） */
 async function graphList(spPath){
-  let url=`${spItemUrl(spPath)}:/children?$select=name,size,lastModifiedDateTime&$top=200`;
-  const out=[];
-  while(url){
-    const res=await graphFetch(url,{headers:{'Accept':'application/json'}});
-    if(!res.ok) await graphThrow(res,'Graph LIST');
-    const d=await res.json();
-    out.push(...(d.value||[]));
-    url=d['@odata.nextLink']||null;
-    if(out.length>5000){console.warn('SP LIST: 5000件で打ち切り',spPath);break;}
+  if(!accessToken) throw new Error('Graph未認証');
+  const encoded=spPath.split('/').map(encodeURIComponent).join('/');
+  const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/children?$select=name,size,lastModifiedDateTime&$top=200`,{
+    headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}
+  });
+  if(!res.ok){
+    const e=await res.json().catch(()=>({}));
+    throw new Error(`Graph LIST ${res.status}: ${e?.error?.message||res.statusText}`);
   }
-  return out;
-}
-/* v2.25: 同時実行数を制限した並列マップ（順次実行による待ち時間を短縮） */
-const SP_CONCURRENCY = 6;   // 読み取り同時数
-const SP_WRITE_CONC  = 3;   // 書き込み同時数（PUTはスロットリングされやすいため低め）
-async function mapLimit(list, limit, fn){
-  const out=new Array(list.length);
-  let cursor=0;
-  const worker=async()=>{
-    for(;;){
-      const i=cursor++;
-      if(i>=list.length) return;
-      try{ out[i]=await fn(list[i], i); }
-      catch(e){ console.warn('mapLimit エラー:',e); out[i]=null; }
-    }
-  };
-  const n=Math.min(limit, list.length);
-  if(n>0) await Promise.all(Array.from({length:n}, worker));
-  return out;
-}
-
-/* v2.25: lastModifiedDateTime による差分同期インデックス
-   （本体は lcMap 側に保存済みのため、ここではファイル名→更新時刻・LC idのみ保持） */
-const SPIDX='leenai_sp_idx_v1';
-function loadSpIdx(){ try{ return JSON.parse(localStorage.getItem(SPIDX))||{}; }catch(e){ return {}; } }
-function saveSpIdx(ix){ try{ localStorage.setItem(SPIDX, JSON.stringify(ix)); }catch(e){ console.warn('SPインデックス保存失敗:',e); } }
-
-/* v2.24: ファイル取得の共通化 */
-async function graphGetJson(spPath){
-  const res=await graphFetch(`${spItemUrl(spPath)}:/content`,{headers:{'Accept':'application/json'}});
-  if(!res.ok) return null;
-  return res.json().catch(()=>null);
-}
-async function graphGetBuffer(spPath){
-  const res=await graphFetch(`${spItemUrl(spPath)}:/content`);
-  if(!res.ok) return null;
-  return res.arrayBuffer();
+  const d=await res.json();
+  return d.value||[];
 }
 function updateSpStatus(msg, ok=true){
   const el=document.getElementById('spStatus');
@@ -1221,71 +1155,48 @@ async function syncFromSP(silent=false){
     const siItem=items.find(it=>it.name==='(compass)SI_DATA.xlsx');
     if(siItem){
       try{
-        const buf=await graphGetBuffer(`${SP_PATH_LC}/(compass)SI_DATA.xlsx`);
-        if(buf){
+        const encoded=`${SP_PATH_LC}/(compass)SI_DATA.xlsx`.split('/').map(encodeURIComponent).join('/');
+        const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/content`,{
+          headers:{'Authorization':`Bearer ${accessToken}`}
+        });
+        if(res.ok){
+          const buf=await res.arrayBuffer();
           const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true});
           siRefData=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
           siRefLoaded=true;
-          renderTtContractList();
-          updateSpStatus('⟳ TT/DP データ確認中...');
-          await autoGenerateTtJson(items);   // v2.24: 取得済みリストを再利用（LIST重複呼び出し回避）
+          await autoGenerateTtJson();
         }
       }catch(e){console.warn('SI_DATA読込エラー:',e);}
     }
-
-    /* v2.25: LC JSON を並列取得 + 未更新ファイルはスキップ + 進捗表示 */
-    const spIdx=loadSpIdx();
-    const targets=items.filter(it=>
-      it.name.endsWith('.json') &&
-      !it.name.includes('_ACL_') && !it.name.includes('_SI_') &&
-      !it.name.includes('_BL_')  && !it.name.includes('_TT_BASE')
-    );
-    const total=targets.length;
-    let done=0, cacheHit=0;
-    const tick=()=>{
-      done++;
-      if(done===total||done%3===0) updateSpStatus(`⟳ SharePoint同期中... ${done}/${total}`);
-    };
-
-    const results=await mapLimit(targets, SP_CONCURRENCY, async(item)=>{
-      const c=spIdx[item.name];
-      // 更新時刻が一致し、対象LCがすべて手元にあるなら再ダウンロード不要
-      if(c && c.mtime===item.lastModifiedDateTime && Array.isArray(c.ids) && c.ids.length
-         && c.ids.every(id=>lcMap[id])){
-        cacheHit++; tick();
-        return {name:item.name, mtime:c.mtime, ids:c.ids, cached:true};
-      }
-      const data=await graphGetJson(`${SP_PATH_LC}/${item.name}`);
-      tick();
-      if(!data) return null;
-      const arr=Array.isArray(data)?data:[data];
-      return {name:item.name, mtime:item.lastModifiedDateTime, lcs:arr.filter(x=>x&&x.lcNo), cached:false};
-    });
-
-    const nextIdx={};
-    for(const r of results){
-      if(!r) continue;
-      if(r.cached){
-        r.ids.forEach(id=>{ importedLcMap[id]=lcMap[id]; });
-        nextIdx[r.name]={mtime:r.mtime, ids:r.ids};
-        count+=r.ids.length;
-      }else{
-        const ids=[];
-        r.lcs.forEach(lc=>{
-          const id=lc.id||lc.lcNo;
-          lcMap[id]=lc; importedLcMap[id]=lc; ids.push(id); count++;
+    // LC JSON 파일 로드
+    for(const item of items){
+      if(!item.name.endsWith('.json'))continue;
+      if(item.name.includes('_ACL_')||item.name.includes('_SI_')||
+         item.name.includes('_BL_')||item.name.includes('_TT_BASE'))continue;
+      try{
+        const encoded=`${SP_PATH_LC}/${item.name}`.split('/').map(encodeURIComponent).join('/');
+        const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/content`,{
+          headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}
         });
-        nextIdx[r.name]={mtime:r.mtime, ids};
-      }
+        if(res.ok){
+          const data=await res.json();
+          const arr=Array.isArray(data)?data:[data];
+          arr.forEach(lc=>{
+            if(lc&&lc.lcNo){
+              lcMap[lc.id||lc.lcNo]=lc;
+              importedLcMap[lc.id||lc.lcNo]=lc;
+              count++;
+            }
+          });
+        }
+      }catch(e){console.warn('LC JSON読込エラー:',item.name,e);}
     }
-    saveSpIdx(nextIdx);
-
     saveLcToStorage();
     renderLcRegList();
     renderSelList('fdLcList','fd');
     renderSelList('siLcList','acl');
     renderSelList('compLcList','comp');
-    updateSpStatus(`☁️ SharePoint 接続済 — ${count}件 のLCを読込${cacheHit?`（うちキャッシュ ${cacheHit}件）`:''}`);
+    updateSpStatus(`☁️ SharePoint 接続済 — ${count}件 のLCを読込`);
     return count;
   }catch(e){
     updateSpStatus('❌ SP同期エラー: '+e.message,false);
@@ -1297,7 +1208,7 @@ async function syncFromSP(silent=false){
 /* ============================================================
    SECTION: TT_DP_JSON — TT/DP JSON 자동 생성
 ============================================================ */
-async function autoGenerateTtJson(knownItems){
+async function autoGenerateTtJson(){
   if(!siRefData.length||!accessToken)return;
   const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
   const CL_KEY='cr49f_s_i.crcf9_payment_classification';
@@ -1307,21 +1218,28 @@ async function autoGenerateTtJson(knownItems){
   const ttRows=siRefData.filter(r=>(r[CL_KEY]==='TT'||r[CL_KEY]==='DP')&&String(r[SINO_KEY])==='1');
   if(!ttRows.length)return;
 
-  // 기존 SP 내 _TT_BASE.json 목록 수집 (v2.25: 並列取得)
+  // 기존 SP 내 _TT_BASE.json 목록 수집
   const existingFiles={};
   try{
-    const items=knownItems||await graphList(SP_PATH_LC);
-    const ttFiles=items.filter(it=>it.name.endsWith('_TT_BASE.json'));
-    const datas=await mapLimit(ttFiles, SP_CONCURRENCY,
-      it=>graphGetJson(`${SP_PATH_LC}/${it.name}`));
-    datas.forEach(d=>{ if(d&&d.contractNo) existingFiles[d.contractNo]=d; });
+    const items=await graphList(SP_PATH_LC);
+    for(const item of items){
+      if(!item.name.endsWith('_TT_BASE.json'))continue;
+      try{
+        const encoded=`${SP_PATH_LC}/${item.name}`.split('/').map(encodeURIComponent).join('/');
+        const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/content`,{
+          headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}
+        });
+        if(res.ok){
+          const data=await res.json();
+          existingFiles[data.contractNo]=data;
+        }
+      }catch(e){}
+    }
   }catch(e){}
 
   const today=new Date();
-  let newCount=0,updateCount=0,skipCount=0;
+  let newCount=0,updateCount=0;
 
-  // v2.25: 書き込み対象を先に洗い出してから並列PUT
-  const toWrite=[];
   for(const row of ttRows){
     const cn=row[CN_KEY];
     if(!cn)continue;
@@ -1330,25 +1248,22 @@ async function autoGenerateTtJson(knownItems){
     const diffDays=(today-cDate)/(1000*60*60*24);
     const within1Month=diffDays<=31;
 
-    // v2.24: 中身が変わっていない場合はPUTしない（ログイン毎の書き込み集中を防止）
     if(existingFiles[cn]){
-      if(within1Month) toWrite.push({cn,row,existing:existingFiles[cn]});
+      if(within1Month){
+        await writeTtBaseJson(cn,row,siRefData);
+        updateCount++;
+      }
     }else{
-      toWrite.push({cn,row,existing:null});
+      await writeTtBaseJson(cn,row,siRefData);
+      newCount++;
     }
   }
-  const written=await mapLimit(toWrite, SP_WRITE_CONC,
-    t=>writeTtBaseJson(t.cn,t.row,siRefData,t.existing));
-  written.forEach((ok,i)=>{
-    if(ok) toWrite[i].existing?updateCount++:newCount++;
-    else if(toWrite[i].existing) skipCount++;
-  });
   if(newCount||updateCount){
-    console.log(`TT/DP JSON: 新規${newCount}件 / 更新${updateCount}件 / 変更なし${skipCount}件`);
+    console.log(`TT/DP JSON: 新規${newCount}件 / 更新${updateCount}件`);
   }
 }
 
-async function writeTtBaseJson(cn,row,allRows,existing){
+async function writeTtBaseJson(cn,row,allRows){
   const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
   const SINO_KEY='cr49f_s_i.crcf9_sino';
   const DATE_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
@@ -1391,16 +1306,10 @@ async function writeTtBaseJson(cn,row,allRows,existing){
     hsCode:si1['crcf9_hs_code']||'',
   };
 
-  // v2.24: generatedAt（毎日変わる）を除いて比較し、実質同一ならPUTを省略
-  if(existing){
-    const norm=o=>JSON.stringify(Object.assign({},o,{generatedAt:''}));
-    if(norm(existing)===norm(json)) return false;
-  }
   try{
     const fname=`${cn}_TT_BASE.json`;
     await graphPut(`${SP_PATH_LC}/${fname}`,json);
-    return true;
-  }catch(e){console.warn('TT_BASE SP書込エラー:',cn,e);return false;}
+  }catch(e){console.warn('TT_BASE SP書込エラー:',cn,e);}
 }
 async function loadFromSP(){
   const count=await syncFromSP(false);
@@ -2229,7 +2138,7 @@ function setAclSrc(src){
         statusEl.className = 'alert alert-info';
         statusEl.innerHTML =
           `💡 <strong>COMPASS_SIタブ</strong>でCOMPASSにログインすると自動取得できます。` +
-          `またはSharePointに <strong>(compass)SI_DATA.xlsx</strong> を配置してください。`;
+          `または保存フォルダに <strong>(compass)SI_DATA.xlsx</strong> を配置してください。`;
       }
     } else {
       renderTtContractList();
@@ -2375,9 +2284,9 @@ function renderTtContractList(){
 
   // SI_DATA 미로드 시
   if(!siRefLoaded||!siRefData.length){
-    el.innerHTML='<div class="empty">SharePointに (compass)SI_DATA.xlsx を配置してください</div>';
+    el.innerHTML='<div class="empty">保存フォルダに (compass)SI_DATA.xlsx を配置してください</div>';
     if(statusEl)statusEl.className='alert alert-warn';
-    if(statusEl)statusEl.innerHTML='⚠️ SI_DATA.xlsx が読み込まれていません。SharePointに配置後、上部の「🔄 SP同期」をクリックしてください。';
+    if(statusEl)statusEl.innerHTML='⚠️ SI_DATA.xlsx が読み込まれていません。保存フォルダに配置後、フォルダ選択ボタンをクリックしてください。';
     return;
   }
   if(statusEl){
@@ -2478,26 +2387,49 @@ async function onCompassXlsFile(inp){
       rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
     }
     compassSiData=rows;
-    // v2.24: 手動アップロード分も自動取得と同じ検索リストUIで扱う
-    //        （旧 <select id="compassContractDD"> は撤去済みのため参照しない）
-    siRefData=rows;
-    siRefLoaded=true;
+    // 계약번호 추출 (TT/DP만)
     const cnKey='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
     const clKey='cr49f_s_i.crcf9_payment_classification';
-    const sinoKey='cr49f_s_i.crcf9_sino';
-    // renderTtContractList() と同じ抽出条件に揃える（TT/DP かつ SI#1）
-    const ttRows=rows.filter(r=>(r[clKey]==='TT'||r[clKey]==='DP')&&String(r[sinoKey])==='1');
-    const contracts=[...new Set(ttRows.map(r=>r[cnKey]).filter(Boolean))];
-    const sel=document.getElementById('compassContractSel');
-    if(sel)sel.style.display='block';
-    renderTtContractList();
-    if(contracts.length===1)pickTtContract(contracts[0]);
+    const ttRows=rows.filter(r=>r[clKey]==='TT'||r[clKey]==='DP');
+    // 계약번호 중복 제거
+    const contracts=[...new Set(ttRows.map(r=>r[cnKey]).filter(Boolean))].sort();
+    const dd=document.getElementById('compassContractDD');
+    dd.innerHTML='<option value="">-- 選択してください --</option>'+
+      contracts.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    document.getElementById('compassContractSel').style.display='block';
+    if(contracts.length===1){dd.value=contracts[0];onCompassContractSelect();}
     updAclBtn();
   }catch(e){alert('Excelの読み込みエラー: '+e.message);}
 }
 
-/* v2.24: onCompassContractSelect() 削除 — 撤去済み <select id="compassContractDD"> 依存のため。
-   選択処理は pickTtContract() / onCompassContractSelectFrom() に一本化。 */
+function onCompassContractSelect(){
+  const cn=document.getElementById('compassContractDD').value;
+  if(!cn){selectedTtContract=null;document.getElementById('compassSiPreview').style.display='none';updAclBtn();return;}
+  selectedTtContract=cn;
+  // SI#1 행 추출 (sino=1)
+  const cnKey='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
+  const siNoKey='cr49f_s_i.crcf9_sino';
+  const rows=compassSiData.filter(r=>r[cnKey]===cn);
+  const si1=rows.find(r=>String(r[siNoKey])==='1')||rows[0];
+  if(!si1){updAclBtn();return;}
+  // 프리뷰 표시
+  const preview=[
+    ['契約番号', cn],
+    ['条件区分', si1['cr49f_s_i.crcf9_payment_classification']||''],
+    ['Consignee', (si1['cr49f_s_i.crcf9_consignee']||'').slice(0,60)],
+    ['Notify Party', (si1['cr49f_s_i.crcf9_notify_party']||'').slice(0,60)],
+    ['POD', si1['cr49f_s_i.crcf9_place_of_delivery_1']||''],
+    ['商品名', si1['crcf9_productname']||''],
+    ['重量', si1['crcf9_weight']||''],
+    ['HS Code', si1['crcf9_hs_code']||''],
+  ];
+  document.getElementById('compassSiPreview').innerHTML=preview
+    .filter(([,v])=>v)
+    .map(([k,v])=>`<div><span style="color:var(--sub);min-width:90px;display:inline-block;">${esc(k)}: </span><strong>${esc(String(v))}</strong></div>`)
+    .join('');
+  document.getElementById('compassSiPreview').style.display='block';
+  updAclBtn();
+}
 
 function buildTtSiSnapshot(){
   // COMPASS Excel에서 ACL 비교용 스냅샷 생성
@@ -4346,23 +4278,25 @@ window.addEventListener('DOMContentLoaded',async()=>{
 });
 
 /* ============================================================
-   SECTION: THEME — 듀얼 테마 토글 (§13 표준)
+   SECTION: THEME — 4테마 순환 토글 (§13 v1.6 표준)
 ============================================================ */
+function updateThemeBtn(theme){
+  const btn=document.getElementById('themeToggleBtn');
+  if(!btn) return;
+  const labels={dark:'🌙 ダーク',light:'☀️ ライト',leenai:'🌿 LEENAI',focus:'🎯 FOCUS'};
+  btn.textContent=labels[theme]||'🌿 LEENAI';
+}
 function toggleTheme(){
   const html=document.documentElement;
-  const next=html.getAttribute('data-theme')==='dark'?'light':'dark';
+  const current=html.getAttribute('data-theme')||'leenai';
+  const order=['dark','light','leenai','focus'];
+  const next=order[(order.indexOf(current)+1)%order.length];
   html.setAttribute('data-theme',next);
   localStorage.setItem('leenai_theme',next);
   updateThemeBtn(next);
 }
-function updateThemeBtn(theme){
-  const btn=document.getElementById('themeToggleBtn');
-  if(!btn)return;
-  btn.textContent=theme==='dark'?'🌙 ダーク':'☀️ ライト';
-}
-// 이전 테마 자동 복원 (IIFE)
 (function(){
-  const saved=localStorage.getItem('leenai_theme')||'dark';
+  const saved=localStorage.getItem('leenai_theme')||'leenai';
   document.documentElement.setAttribute('data-theme',saved);
   document.addEventListener('DOMContentLoaded',()=>updateThemeBtn(saved));
 })();
