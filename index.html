@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.26 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.27 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.26 (2026-08-07) | BUG FIX: 保険/Port/Seal/COTECNA他 全7パターン修正</span>
+  <span>LEENEAR CORPORATION — v2.27 (2026-08-07) | 2次NG再判定API追加: 誤判定自動修正</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -1530,6 +1530,67 @@ async function fileToContent(f){
   const m=f.type||'image/jpeg';
   return {type:'image',source:{type:'base64',media_type:m,data:d}};
 }
+/* ============================================================
+   SECTION: NG再判定 — 2次APIで誤判定を自動修正
+============================================================ */
+async function reviewNgItems(rawText, docs){
+  // NG行を抽出
+  const ngLines = rawText.split('\n').filter(l =>
+    /^CHECK-[A-Z0-9]+[A-Z]?\s*\|\s*NG\s*\|/i.test(l.trim())
+  );
+  if(ngLines.length === 0) return rawText;
+
+  const prompt = `以下は書類チェックの1次判定結果です。NG判定された項目のみを厳密に再検討してください。
+
+【1次判定でNGとなった項目】
+${ngLines.join('\n')}
+
+【再検討ルール — 厳守】
+1. 各NG項目の分析テキスト（パイプ区切り最後の部分）を精査する
+2. 分析テキストに「充足」「記載あり」「OK」「問題なし」「条件を満たす」「修正不要」「一致」「確認済」「全条件充足」「充足されたため」等の肯定表現がある場合 → 誤判定のためOKまたはWARNに修正
+3. 「確認せよ」「個別確認」「を確認」等の指示文のみでNGとした場合 → 今すぐ実際の書類内容を確認し正しく判定
+4. 書類に実際の不備がある場合のみNGを維持
+5. 新しいNGを追加することは絶対に禁止
+
+【出力形式】変更が必要な項目のみ1行で出力（他は一切出力しない）:
+REVISED|CHECK-番号|OK または WARN|修正理由（具体的に）
+変更がない場合のみ: REVISED|NONE`;
+
+  try{
+    const reviewed = await callApi([{role:'user', content:[...docs, {type:'text', text:prompt}]}], 2000);
+    if(!reviewed.includes('REVISED|') || reviewed.includes('REVISED|NONE')) return rawText;
+
+    let result = rawText;
+    reviewed.split('\n').filter(l => /^REVISED\|CHECK-/i.test(l.trim())).forEach(rl => {
+      const parts = rl.split('|');
+      if(parts.length < 4) return;
+      const checkId = parts[1].trim();
+      const newSt = parts[2].trim().toUpperCase();
+      if(newSt !== 'OK' && newSt !== 'WARN') return;
+      const reason = parts.slice(3).join('|').trim();
+      result = result.split('\n').map(line => {
+        if(/^CHECK-/i.test(line.trim()) && line.includes(checkId+'|') && /\|\s*NG\s*\|/i.test(line)){
+          return line.replace(/\|\s*NG\s*\|/i, `|${newSt}|`) + ` ※再判定→${newSt}: ${reason}`;
+        }
+        return line;
+      }).join('\n');
+    });
+
+    // OVERALL 再計算
+    const hasNG   = result.split('\n').some(l => /^CHECK-[A-Z0-9]+[A-Z]?\s*\|\s*NG\s*\|/i.test(l.trim()));
+    const hasWARN = result.split('\n').some(l => /^CHECK-[A-Z0-9]+[A-Z]?\s*\|\s*WARN\s*\|/i.test(l.trim()));
+    if(!hasNG){
+      const newOv = hasWARN ? 'WARN' : 'OK';
+      result = result.replace(/\nOVERALL:\s*NG(\s*\n)/i, `\nOVERALL: ${newOv}$1`);
+      result = result.replace(/\nOVERALL:\s*NG$/i,           `\nOVERALL: ${newOv}`);
+    }
+    return result;
+  }catch(e){
+    console.warn('reviewNgItems error:', e);
+    return rawText;
+  }
+}
+
 async function callApi(msgs,max=4000,_retry=0){
   const k=gk();
   if(!k)throw new Error('API Keyが登録されていません');
@@ -2189,8 +2250,11 @@ OVERALL: OK または NG または WARN
 ※OVERALLは必ず最後に1回だけ出力すること`}]}],5000);
 
     setStep(['fs1','fs2','fs3'],3);
+    document.getElementById('fdMsg').textContent='NG項目を再検証中...';
+    const combined=r1+'\n'+r2;
+    const reviewedFd=await reviewNgItems(combined,fc);
     await new Promise(r=>setTimeout(r,200));
-    const res=renderCheckResult(r1+'\n'+r2,invNo,lcMeta,'fd');
+    const res=renderCheckResult(reviewedFd,invNo,lcMeta,'fd');
     hist.unshift({type:'FD',contractNo:lcMeta.contractNo,invNo:invNo||'-',country:lcMeta.country,overall:res.overall,checkedAt:new Date().toLocaleString('ja-JP'),html:document.getElementById('fdRc').innerHTML});
     document.getElementById('fdProg').style.display='none';
     document.getElementById('fdResult').style.display='block';
@@ -2726,9 +2790,11 @@ OVERALL: OK または NG または WARN`;
 
     const raw=await callApi([{role:'user',content:[...ivplContent,...aclContent,{type:'text',text:prompt}]}],5000);
     setStep(['as1','as2','as3','as4'],4);
+    document.getElementById('aclMsg').textContent='NG項目を再検証中...';
+    const reviewedAcl=await reviewNgItems(raw,[...ivplContent,...aclContent]);
 
     const displayMeta=isLcMode?lcMeta:{contractNo:ttSnap.contractNo,country:ttSnap.country};
-    const res=renderAclResult(raw,invNo,displayMeta);
+    const res=renderAclResult(reviewedAcl,invNo,displayMeta);
     aclCheckResult={
       invoiceNo:invNo,
       contractNo:displayMeta.contractNo,
@@ -3013,8 +3079,10 @@ OVERALL: OK または NG または WARN
     document.getElementById('blMsg').textContent='LC条件と照合中...';
     const raw=await callApi([{role:'user',content:[...blContent,{type:'text',text:prompt}]}],5000);
     setStep(['bs1','bs2','bs3','bs4'],4);
+    document.getElementById('blMsg').textContent='NG項目を再検証中...';
+    const reviewedBl=await reviewNgItems(raw,blContent);
 
-    renderBlResult(raw,loadedAclHistory.invoiceNo,lc,ex);
+    renderBlResult(reviewedBl,loadedAclHistory.invoiceNo,lc,ex);
 
     // 이력 업데이트 저장
     const blNoM=raw.match(/BL_NO:\s*([^\n]+)/);
