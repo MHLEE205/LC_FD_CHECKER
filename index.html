@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.27 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.28 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -24,9 +24,9 @@
   --text:#e8eaf0;--sub:#8b90a8;--sub2:#4a5f80;--r:12px;
   --shadow:0 4px 24px rgba(0,0,0,.35);
 }
-[data-theme="light"]{--bg:#FAF9F8;--surface:#FFFFFF;--surface2:#F3F2F1;--surface3:#EDEBE9;--border:#E1DFDD;--text:#201F1E;--sub:#3B3A39;--sub2:#706E6C;--accent:#0F6CBD;--ok:#16a34a;--warn:#d97706;--danger:#dc2626;--info:#0284c7;}
-[data-theme="leenai"]{--bg:#DCEBD8;--surface:#F0F5EF;--surface2:#D4E8D0;--surface3:#C5DCC0;--border:#A8C8A3;--text:#1F2A22;--sub:#2E4032;--sub2:#4E6055;--accent:#2F6B45;--accent2:#3F6FA8;--ok:#16a34a;--warn:#d97706;--danger:#dc2626;--info:#0284c7;}
-[data-theme="focus"]{--bg:#D8DDE8;--surface:#EDF0F5;--surface2:#CDD4E0;--surface3:#BEC8D6;--border:#9DAABE;--text:#202733;--sub:#2E3A4A;--sub2:#4E5D6E;--accent:#315F9E;--accent2:#2F7D6A;--ok:#16a34a;--warn:#d97706;--danger:#dc2626;--info:#0284c7;}
+[data-theme="light"]{--bg:#FAF9F8;--surface:#FFFFFF;--surface2:#F3F2F1;--surface3:#EDEBE9;--border:#E1DFDD;--text:#201F1E;--sub:#605E5C;--sub2:#A19F9D;--accent:#0F6CBD;}
+[data-theme="leenai"]{--bg:#E9EEE8;--surface:#F4F5F7;--surface2:#E1E8E0;--surface3:#D5DFD3;--border:#B9C7B7;--text:#1F2A22;--sub:#4F5E52;--sub2:#6D7B71;--accent:#2F6B45;}
+[data-theme="focus"]{--bg:#E7EAF0;--surface:#F4F5F7;--surface2:#DDE2EA;--surface3:#CFD6E2;--border:#AEB8C8;--text:#202733;--sub:#515C6C;--sub2:#697587;--accent:#315F9E;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:14px 12px 90px;max-width:1200px;margin:0 auto;}
 h1{font-size:1.1rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px;}
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.27 (2026-08-07) | 2次NG再判定API追加: 誤判定自動修正</span>
+  <span>LEENEAR CORPORATION — v2.28 (2026-08-18) | SI自動生成: LC住所/47A/POL等 欠落フィールド補完</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -3819,14 +3819,25 @@ ALL: ${r['cr49f_s_i.crcf9_all']||''}`).join('\n');
 - Address : 住所・EMAIL・TAX ID等（Notify Partyの連絡先情報）
 - TEL / FAX : 別フィールドに分けて入力
 
+【LC情報優先ルール — 厳守】
+① Applicant住所が記載されている場合、過去SI実績に関わらず必ずその住所をaddressに使用すること。過去SI住所の流用禁止。
+② 47A追加条件のORDER NOは必ずblText1・allに反映すること。過去SIのORDER NOを流用することは絶対禁止。
+③ 運賃条件（CIF/FOB等）はpaymentTermsに正確に反映すること。
+
 === 新しいLC情報 ===
 LC番号: ${lc.lcNo||''} DATED ON ${lc.lcDate||''}
-Applicant: ${(lc.applicant||'').slice(0,200)}
+Applicant(会社名): ${(lc.applicant||'').slice(0,200)}
+Applicant住所(★必ずaddressに使用): ${(lc.applicantAddress||'未記載').slice(0,300)}
 Consignee(46A): ${(lc.consignee46A||'').slice(0,200)}
 NotifyParty(46A)指示文: ${(lc.notifyParty46A||'').slice(0,200)}
+POL(44E): ${lc.pol||''}
 POD(44F): ${lc.pod||''}
 商品(45A): ${(lc.commodity45A||'').slice(0,200)}
 支払(42C): ${lc.term42C||''}
+運賃条件: ${lc.freightCondition||''}
+分割船積(43P): ${lc.partialShipment||''}
+積替(43T): ${lc.transhipment||''}
+47A追加条件(★ORDER NO等 必読・blText1/allに反映): ${(lc.addCond47A||'なし').slice(0,500)}
 国: ${lc.country||''}
 
 === 過去SI実績（${sourceLabel}）===
