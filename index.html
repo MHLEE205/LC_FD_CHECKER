@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.28 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.29 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.26</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.29</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.28 (2026-08-18) | SI自動生成: LC住所/47A/POL等 欠落フィールド補完</span>
+  <span>LEENEAR CORPORATION — v2.29 (2026-10-02) | 過去SI参照: 同一バイヤー×同一銀行のみ（初回銀行は参照なし）</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -913,6 +913,84 @@ function detectBankGroup(lcNo, buyerCode) {
   return null;
 }
 
+/* ------------------------------------------------------------
+   v2.29 PR#1: 過去SI参照の安全ガード（共通）
+   原則: 「同一バイヤー × 同一銀行」が確実に識別できた場合のみ過去SIを参照する。
+         識別できない場合（初回銀行/マスター未登録）は参照せず、LC原文のみで作成する。
+------------------------------------------------------------ */
+const PAST_SI_CONTRACT_FETCH = 300;  // 契約番号 contains 検索の取得上限（クライアント側で完全一致に絞る）
+const PAST_SI_CONTRACT_MAX   = 20;   // 完全一致後にSI取得対象とする契約数（新しい順）
+let pastSiRefInfo = {reason:'', buyerCode:null, bankGroup:null, lcNo:''};
+
+// 参照なしの理由 → 画面表示用HTML
+function pastSiNoRefMessage(info){
+  const i = info || {};
+  const lc = esc(i.lcNo || '');
+  const bc = esc(i.buyerCode || '');
+  const bg = esc(i.bankGroup || '');
+  switch(i.reason){
+    case 'NO_BUYER':
+      return '⚠️ 契約番号からバイヤーコードを判別できないため、過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。';
+    case 'NO_BANK_GROUP':
+      return `🆕 <strong>初回銀行 / 銀行マスター未登録</strong>（LC番号: ${lc}）— 過去SIは参照せず、<strong>LC原文のみ</strong>で作成しています。`+
+             `<br><span style="opacity:.85">※ 銀行マスターに登録すると、次回から同一銀行の過去SIが参照されます。</span>`;
+    case 'NO_SAME_BANK_SI':
+      return `ℹ️ 同一バイヤー(${bc}) × 同一銀行(${bg})の過去SIがありません — 過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
+    case 'NO_RECENT_SI':
+      return `ℹ️ 同一バイヤー(${bc}) × 同一銀行(${bg})の直近3ヶ月以内の過去SIがありません — 過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
+    case 'NO_PAST_SI':
+      return `ℹ️ 同一バイヤー(${bc})の過去SIがありません — <strong>LC原文のみ</strong>で作成しています。`;
+    default:
+      return '';
+  }
+}
+
+// Excel(SI_DATA.xlsx)参照用のキー（Dataverse未ログイン時のフォールバック）
+const SI_REF_KEYS = {
+  CN:   'cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no',
+  NP:   'cr49f_s_i.crcf9_notify_party',
+  CL:   'cr49f_s_i.crcf9_payment_classification',
+  SINO: 'cr49f_s_i.crcf9_sino',
+  LC:   'cr49f_s_i.cr49f_lc_no',
+  DATE: 'cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date'
+};
+
+// Excel参照の過去SI選定（純粋関数）。Dataverse経路(fetchPastSIs)と同一ルール。
+//   → {rows:[...最大3件], reason, buyerCode, bankGroup, lcNo}
+function pickExcelPastSIs(lc, data, now){
+  const K = SI_REF_KEYS;
+  const contractNo = (lc && lc.contractNo) || '';
+  const lcNo = (lc && lc.lcNo) || '';
+  const out = {rows:[], reason:'', buyerCode:null, bankGroup:null, lcNo};
+  const buyerCode = extractBuyerCode(contractNo);
+  out.buyerCode = buyerCode;
+  if(!buyerCode){ out.reason='NO_BUYER'; return out; }
+  const bankGroup = detectBankGroup(lcNo, buyerCode);
+  out.bankGroup = bankGroup;
+  if(!bankGroup){ out.reason='NO_BANK_GROUP'; return out; }
+
+  const lcSiRows = (data||[]).filter(r => r[K.CL]==='LC' && String(r[K.SINO])==='1');
+  // バイヤー: Contract番号のバイヤーコード完全一致（会社名キーワードの部分一致は使わない）
+  const byBuyer = lcSiRows.filter(r => {
+    const cn = String(r[K.CN]||'');
+    return cn !== contractNo && extractBuyerCode(cn) === buyerCode;
+  });
+  if(!byBuyer.length){ out.reason='NO_PAST_SI'; return out; }
+  // 銀行: マスター基準の銀行グループ一致（LC番号の先頭N文字比較は使わない）
+  const byBank = byBuyer.filter(r => detectBankGroup(String(r[K.LC]||''), buyerCode) === bankGroup);
+  if(!byBank.length){ out.reason='NO_SAME_BANK_SI'; return out; }
+
+  const today = now ? new Date(now) : new Date();
+  const cutoff = new Date(today); cutoff.setMonth(cutoff.getMonth()-3);
+  const recent = byBank
+    .filter(r => { const d=r[K.DATE]; if(!d) return false; const dt=new Date(String(d).slice(0,10)); return dt>=cutoff && dt<today; })
+    .sort((a,b) => new Date(String(b[K.DATE]||'').slice(0,10)) - new Date(String(a[K.DATE]||'').slice(0,10)))
+    .slice(0,3);
+  if(!recent.length){ out.reason='NO_RECENT_SI'; return out; }
+  out.rows = recent; out.reason = 'OK';
+  return out;
+}
+
 /* ============================================================
    SECTION: COMPASS_DATAVERSE_INFRA
    COMPASS Dataverse 직접 연결 인프라 (Phase2~)
@@ -1096,18 +1174,33 @@ async function dvGet(path) {
 
 // 過去SI取得 (Phase3で呼び出す)
 async function fetchPastSIs(contractNo, lcNo) {
+  // ── v2.29 PR#1: 過去SI参照は「同一バイヤー × 同一銀行」が確実に識別できた場合のみ ──
+  //   ・銀行グループが特定できない(初回銀行/マスター未登録)場合は参照しない（全銀行へのフォールバック禁止）
+  //   ・同一銀行の過去SIが無い場合も参照しない（全銀行へのフォールバック禁止）
+  //   ・バイヤーはContract番号から抽出したコードの完全一致のみ（contains部分一致による他バイヤー混入を排除）
+  pastSiRefInfo = {reason:'', buyerCode:null, bankGroup:null, lcNo:lcNo||''};
   if(!dvTokenValid()) return [];
   try {
     const buyerCode = extractBuyerCode(contractNo);
-    if(!buyerCode) return [];
+    pastSiRefInfo.buyerCode = buyerCode;
+    if(!buyerCode) { pastSiRefInfo.reason = 'NO_BUYER'; return []; }
 
+    const bankGroup = detectBankGroup(lcNo, buyerCode);
+    pastSiRefInfo.bankGroup = bankGroup;
+    if(!bankGroup) { pastSiRefInfo.reason = 'NO_BANK_GROUP'; return []; }
+
+    // contains() は部分一致のため他バイヤー(例: 'A' → CA/TA/HA…)が混入する。
+    // サーバー側で広めに取得 → クライアント側でバイヤーコード完全一致に絞る。
     const scData = await dvGet(
       `cr49f_sale_contracts?$filter=contains(cr49f_sale_contract_no,'${buyerCode}')` +
       `&$select=cr49f_sale_contractid,cr49f_sale_contract_no,cr49f_sale_contract_date` +
-      `&$orderby=cr49f_sale_contract_date desc&$top=20`
+      `&$orderby=cr49f_sale_contract_date desc&$top=${PAST_SI_CONTRACT_FETCH}`
     );
-    const scList = scData.value || [];
-    if(!scList.length) return [];
+    const scList = (scData.value || [])
+      .filter(sc => extractBuyerCode(sc.cr49f_sale_contract_no) === buyerCode
+                 && sc.cr49f_sale_contract_no !== contractNo)
+      .slice(0, PAST_SI_CONTRACT_MAX);
+    if(!scList.length) { pastSiRefInfo.reason = 'NO_PAST_SI'; return []; }
 
     const siFields = [
       'cr49f_s_iid','cr49f_lc_no','cr49f_sale_contract_id',
@@ -1131,16 +1224,12 @@ async function fetchPastSIs(contractNo, lcNo) {
       )
     );
     const allSIs = siArrays.flat();
-    if(!allSIs.length) return [];
+    if(!allSIs.length) { pastSiRefInfo.reason = 'NO_PAST_SI'; return []; }
 
-    const bankGroup = detectBankGroup(lcNo, buyerCode);
-    let filtered = allSIs;
-    if(bankGroup) {
-      const f = allSIs.filter(si => detectBankGroup(si.cr49f_lc_no, buyerCode) === bankGroup);
-      if(f.length > 0) filtered = f;
-    }
+    // 同一銀行グループのみ（一致が0件でも他銀行へ戻さない）
+    const filtered = allSIs.filter(si => detectBankGroup(si.cr49f_lc_no, buyerCode) === bankGroup);
+    if(!filtered.length) { pastSiRefInfo.reason = 'NO_SAME_BANK_SI'; return []; }
 
-    filtered = filtered.filter(si => si._sc_no !== contractNo);
     filtered.sort((a,b) => new Date(b.createdon) - new Date(a.createdon));
     const final3 = filtered.slice(0,3);
 
@@ -1159,10 +1248,12 @@ async function fetchPastSIs(contractNo, lcNo) {
     // SI 헤더에 _details 배열 첨부
     final3.forEach((si, i) => { si._details = detailArrays[i] || []; });
 
+    pastSiRefInfo.reason = 'OK';
     return final3;
 
   } catch(e) {
     console.warn('fetchPastSIs error:', e.message);
+    pastSiRefInfo.reason = 'ERROR';
     return [];
   }
 }
@@ -3487,6 +3578,7 @@ function initCompLC(lc){
   detectCompSpecial();
   showCompForm();
   pastSIsData=[];
+  pastSiRefInfo={reason:'',buyerCode:null,bankGroup:null,lcNo:''};  // v2.29: 前LCの参照情報を持ち越さない
   renderPastSiPanel([],null,null);
   if(dvTokenValid()){
     fetchPastSIs(lc.contractNo||'',lc.lcNo||'').then(pastSIs=>{
@@ -3516,12 +3608,19 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
   if(!statusEl || !contentEl) return;
 
   if(!pastSIs || pastSIs.length === 0) {
-    statusEl.textContent = dvTokenValid() ? '該当なし' : '未ログイン';
-    bankEl.textContent   = '';
-    contentEl.innerHTML  = `<div class="empty" style="font-size:.78rem;">
-      ${dvTokenValid()
-        ? '過去SIが見つかりませんでした'
-        : '<button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.78rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>'}
+    // v2.29 PR#1: 参照しなかった理由を画面に明示（初回銀行/マスター未登録など）
+    const info = pastSiRefInfo || {};
+    const noRefMsg = dvTokenValid() ? pastSiNoRefMessage(info) : '';
+    statusEl.textContent = dvTokenValid() ? (noRefMsg ? '参照なし' : '該当なし') : '未ログイン';
+    bankEl.textContent   = (dvTokenValid() && info.buyerCode)
+      ? `Buyer: ${info.buyerCode} × Bank: ${info.bankGroup || '未識別'}`
+      : '';
+    contentEl.innerHTML  = dvTokenValid()
+      ? (noRefMsg
+          ? `<div class="alert alert-info" style="font-size:.78rem;line-height:1.5;">${noRefMsg}</div>`
+          : `<div class="empty" style="font-size:.78rem;">過去SIが見つかりませんでした</div>`)
+      : `<div class="empty" style="font-size:.78rem;">
+      <button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.78rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>
     </div>`;
     return;
   }
@@ -3757,27 +3856,19 @@ BL Text1: ${si.crcf9_bl_text1||''}
 ALL: ${si.crcf9_all||''}`).join('\n');
     refNos=pastSIs.map(si=>si._sc_no||'').filter(Boolean).join('、');
   } else {
-    // Excel 폴백 (siRefData)
+    // Excel 폴백 (siRefData) — v2.29 PR#1: Dataverse経路と同一ルール（同一バイヤー×同一銀行のみ）
     if(!siRefLoaded||!siRefData.length) return;
-    const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
-    const NP_KEY='cr49f_s_i.crcf9_notify_party';
-    const CL_KEY='cr49f_s_i.crcf9_payment_classification';
-    const SINO_KEY='cr49f_s_i.crcf9_sino';
-    const LC_KEY='cr49f_s_i.cr49f_lc_no';
-    const DATE_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
-    function getBankPrefix(lcNo){if(!lcNo)return'';return String(lcNo).trim().split(/\s/)[0].slice(0,5).toUpperCase();}
-    const lcSiRows=siRefData.filter(r=>r[CL_KEY]==='LC'&&String(r[SINO_KEY])==='1');
-    if(!lcSiRows.length) return;
-    const buyerKeyword=(lc.applicant||lc.notifyParty46A||'').split(/[\n,]/)[0].trim().slice(0,30).toLowerCase();
-    if(!buyerKeyword) return;
-    const newBankPrefix=getBankPrefix(lc.lcNo||'');
-    const byBuyer=lcSiRows.filter(r=>{const np=String(r[NP_KEY]||'').toLowerCase();return np.includes(buyerKeyword)||buyerKeyword.split(' ').some(w=>w.length>3&&np.includes(w));});
-    if(!byBuyer.length) return;
-    const byBank=newBankPrefix?byBuyer.filter(r=>getBankPrefix(r[LC_KEY]||'')===newBankPrefix):byBuyer;
-    const today=new Date();const cutoff=new Date(today);cutoff.setMonth(cutoff.getMonth()-3);
-    const recentSi=byBank.filter(r=>{const d=r[DATE_KEY];if(!d)return false;const dt=new Date(String(d).slice(0,10));return dt>=cutoff&&dt<today;})
-      .sort((a,b)=>new Date(String(b[DATE_KEY]||'').slice(0,10))-new Date(String(a[DATE_KEY]||'').slice(0,10))).slice(0,3);
-    if(!recentSi.length) return;
+    const CN_KEY=SI_REF_KEYS.CN;
+    const NP_KEY=SI_REF_KEYS.NP;
+    const LC_KEY=SI_REF_KEYS.LC;
+    const pick=pickExcelPastSIs(lc, siRefData);
+    pastSiRefInfo={reason:pick.reason,buyerCode:pick.buyerCode,bankGroup:pick.bankGroup,lcNo:pick.lcNo};
+    if(!pick.rows.length){
+      const m=pastSiNoRefMessage(pastSiRefInfo);
+      if(noteEl&&m) noteEl.innerHTML=`<div class="alert alert-info" style="line-height:1.5;">${m}</div>`;
+      return;
+    }
+    const recentSi=pick.rows;
     sourceLabel=`Excel参照 (${recentSi.length}件)`;
     siSummary=recentSi.map((r,i)=>`
 [過去SI ${i+1}件目 — ${r[CN_KEY]||''}]
