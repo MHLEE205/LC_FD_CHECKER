@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.33 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.34 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.33</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.34</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.33 (2026-10-06) | Invoice専用文句: TRADE TERM形式に対応・DEMURRAGE条件はInvoice言及時のみ・LC文言の途中切れ防止</span>
+  <span>LEENEAR CORPORATION — v2.34 (2026-10-06) | ログイン削減: OutlookログインだけでCOMPASSにも自動接続（失敗時もOutlookログイン状態を維持）</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -789,6 +789,7 @@ async function startOAuthFlow(){
         const u = await (await fetch('https://graph.microsoft.com/v1.0/me', {headers:{Authorization:'Bearer '+accessToken}})).json();
         loggedIn = true; loggedInUser = u.displayName || u.mail || u.userPrincipalName;
         updateAuthUI(true, loggedInUser); resolve();
+        acquireDvTokenViaRefresh();   // v2.34: 同じログインでCOMPASS(Dataverse)用トークンも静かに取得（失敗時は従来のCOMPASSログイン）
       } catch(err){ reject(err); }
     };
     window.addEventListener('message', handler);
@@ -796,11 +797,11 @@ async function startOAuthFlow(){
   });
 }
 function toggleAuth(){
-  if (loggedIn){ loggedIn=false; loggedInUser=''; accessToken=''; refreshToken=''; tokenExpiry=0; updateAuthUI(false); }
+  if (loggedIn){ loggedIn=false; loggedInUser=''; accessToken=''; refreshToken=''; tokenExpiry=0; dvToken=null; dvExpiry=0; clearTimeout(dvRenewTimer); refreshDvBanner(); updateAuthUI(false); }
   else { startOAuthFlow().catch(e => { if (e.message!=='CANCELLED') console.error(e); }); }
 }
 /* v2.24: refresh_token でアクセストークンを更新（失敗時は再ログインを促す） */
-async function refreshGraphToken(){
+async function refreshGraphToken(silent=false){
   if (!refreshToken) return false;
   try {
     const body = new URLSearchParams({ client_id:OAUTH_CFG.clientId, grant_type:'refresh_token', refresh_token:refreshToken, scope:OAUTH_CFG.scopes });
@@ -815,7 +816,7 @@ async function refreshGraphToken(){
     console.warn('トークン更新エラー:', e);
     accessToken=''; refreshToken=''; tokenExpiry=0; loggedIn=false; loggedInUser='';
     updateAuthUI(false);
-    updateSpStatus('⚠ セッションの有効期限が切れました。再度Outlookログインしてください。', false);
+    if(!silent) updateSpStatus('⚠ セッションの有効期限が切れました。再度Outlookログインしてください。', false);
     return false;
   }
 }
@@ -1012,6 +1013,7 @@ const DV_API         = 'https://orgde512c6f.crm7.dynamics.com/api/data/v9.2';
 
 let dvToken  = null;
 let dvExpiry = 0;
+let dvRenewTimer = null, dvRtOnce = '', dvRenewFailTs = 0;   // v2.34
 
 function dvTokenValid() { return dvToken && Date.now() < dvExpiry; }
 
@@ -1025,6 +1027,8 @@ async function startDvLogin() {
   sessionStorage.setItem('dv_pkce_v',v);
   sessionStorage.setItem('dv_pkce_s',st);
   sessionStorage.setItem('dv_return_tab','comp');
+  // v2.34: 画面遷移でメモリ上のOutlookログイン情報が消えるため、遷移中のみ一時保管（復元後すぐ削除）
+  if(refreshToken) sessionStorage.setItem('gr_rt', refreshToken);
   const p=new URLSearchParams({
     client_id:DV_CLIENT_ID, response_type:'code',
     redirect_uri:DV_REDIRECT, scope:DV_SCOPE,
@@ -1053,12 +1057,59 @@ async function handleDvCallback() {
   if(d.error){ console.error('DV Token error:',d.error_description); return false; }
   dvToken=d.access_token;
   dvExpiry=Date.now()+(d.expires_in-60)*1000;
+  dvRtOnce=d.refresh_token||'';   // v2.34: COMPASS先ログイン時にOutlook(Graph)ログインを自動復元するために使用（メモリのみ・使用後に破棄）
   sessionStorage.removeItem('dv_pkce_v');
   sessionStorage.removeItem('dv_pkce_s');
   history.replaceState({},'',DV_REDIRECT);
   return true;
 }
 
+
+/* ------------------------------------------------------------
+   v2.34: ログイン回数の削減（Outlook と COMPASS は同じアプリ・同じ組織アカウント）
+   ① Outlookログインで得たリフレッシュトークンから COMPASS(Dataverse) 用トークンを静かに取得 → ログイン1回
+   ② 取得できない場合は従来どおりCOMPASSログイン（画面遷移）。遷移前にリフレッシュトークンを一時保管し、
+      戻った後に復元して Outlook の再ログインを不要にする → 最大2回
+   ・トークンは永続保存しない（メモリ。遷移中のみ sessionStorage に一時保管し、復元後すぐ削除）
+------------------------------------------------------------ */
+function refreshDvBanner(){ const b=document.getElementById('compDvBanner'); if(b) b.style.display=dvTokenValid()?'none':''; }
+function scheduleDvRenew(){
+  clearTimeout(dvRenewTimer);
+  const ms=Math.max(30000, dvExpiry-Date.now()-5*60*1000);          // 期限の5分前に更新
+  dvRenewTimer=setTimeout(()=>{ acquireDvTokenViaRefresh(); }, ms);
+}
+async function acquireDvTokenViaRefresh(){
+  if(!refreshToken) return false;
+  if(Date.now()-dvRenewFailTs < 60000) return false;                 // 失敗直後の連続リトライを避ける
+  try{
+    const r=await fetch(`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/token`,{
+      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({client_id:DV_CLIENT_ID, grant_type:'refresh_token', refresh_token:refreshToken, scope:DV_SCOPE})
+    });
+    const t=await r.json();
+    if(t.error||!t.access_token) throw new Error(t.error_description||t.error||'refresh failed');
+    dvToken=t.access_token; dvExpiry=Date.now()+((t.expires_in||3600)-60)*1000;
+    if(t.refresh_token) refreshToken=t.refresh_token;
+    dvRenewFailTs=0; scheduleDvRenew(); refreshDvBanner();
+    return true;
+  }catch(e){
+    dvRenewFailTs=Date.now();
+    console.warn('COMPASSトークンの自動取得に失敗（COMPASSログインが必要）:', e.message||e);
+    return false;
+  }
+}
+async function ensureDvToken(){ return dvTokenValid() ? true : await acquireDvTokenViaRefresh(); }
+// リフレッシュトークンから Outlook(Graph) ログイン状態を復元（成功: true）
+async function loginGraphFromRefresh(rt){
+  if(!rt) return false;
+  refreshToken=rt;
+  if(!(await refreshGraphToken(true))) return false;
+  let name='';
+  try{ const u=await (await fetch('https://graph.microsoft.com/v1.0/me',{headers:{Authorization:'Bearer '+accessToken}})).json(); name=u.displayName||u.mail||u.userPrincipalName||''; }catch(e){}
+  loggedIn=true; loggedInUser=name||'ログイン済み';
+  updateAuthUI(true, loggedInUser);
+  return true;
+}
 
 /* ============================================================
    SECTION: SHAREPOINT — Graph API (v2.23 / 安定化 v2.24)
@@ -1165,6 +1216,7 @@ function updateSpStatus(msg, ok=true){
   if(el){ el.textContent=msg; el.style.color=ok?'#86efac':'#f59e0b'; }
 }
 async function dvGet(path) {
+  if(!dvTokenValid()) await acquireDvTokenViaRefresh();   // v2.34: 期限切れなら静かに更新
   const res=await fetch(`${DV_API}/${path}`,{
     headers:{
       'Authorization':`Bearer ${dvToken}`,
@@ -1187,7 +1239,7 @@ async function fetchPastSIs(contractNo, lcNo) {
   //   ・同一形式(=同一銀行)の過去SIが無い場合(初回銀行)も参照しない（全銀行へのフォールバック禁止）
   //   ・バイヤーはContract番号から抽出したコードの完全一致のみ（contains部分一致による他バイヤー混入を排除）
   pastSiRefInfo = {reason:'', buyerCode:null, bankGroup:null, lcNo:lcNo||''};
-  if(!dvTokenValid()) return [];
+  if(!(await ensureDvToken())) return [];                  // v2.34: 期限切れでもリフレッシュで更新できれば続行
   try {
     const buyerCode = extractBuyerCode(contractNo);
     pastSiRefInfo.buyerCode = buyerCode;
@@ -3589,8 +3641,14 @@ function initCompLC(lc){
   pastSIsData=[];
   pastSiRefInfo={reason:'',buyerCode:null,bankGroup:null,lcNo:''};  // v2.29: 前LCの参照情報を持ち越さない
   renderPastSiPanel([],null,null);
-  if(dvTokenValid()){
+  if(dvTokenValid()||refreshToken){
     fetchPastSIs(lc.contractNo||'',lc.lcNo||'').then(pastSIs=>{
+      if(!dvTokenValid()){   // v2.34: 自動更新に失敗 → 従来どおり（COMPASSログイン案内 + Excel参照）
+        renderPastSiPanel([],null,null);
+        if(siRefLoaded&&siRefData.length) runSiRefImprove(lc,null);
+        refreshDvBanner();
+        return;
+      }
       pastSIsData=pastSIs;
       const bc=extractBuyerCode(lc.contractNo||'');
       const bg=detectBankGroup(lc.lcNo||'',bc);
@@ -4642,8 +4700,10 @@ function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').repla
 ============================================================ */
 window.addEventListener('DOMContentLoaded',async()=>{
   // COMPASS DV 콜백 처리
+  let dvReturned=false, dvOk=false;
   if(new URLSearchParams(location.search).get('code')) {
-    await handleDvCallback();
+    dvReturned=true;
+    dvOk = await handleDvCallback();
     const gate = document.getElementById('loginGate');
     if(gate) gate.style.display = 'none';
     const retTab = sessionStorage.getItem('dv_return_tab');
@@ -4657,6 +4717,16 @@ window.addEventListener('DOMContentLoaded',async()=>{
   renderAmendLcList();
   document.getElementById('lcSearch').addEventListener('input',renderLcRegList);
   updateApiDot();
+  // v2.34: COMPASSログインの画面遷移後にOutlookログイン状態を復元（再ログイン不要）
+  if(dvReturned){
+    const rt=sessionStorage.getItem('gr_rt'); sessionStorage.removeItem('gr_rt');
+    let restored=false;
+    if(rt) restored=await loginGraphFromRefresh(rt);
+    if(!restored && dvOk && dvRtOnce) restored=await loginGraphFromRefresh(dvRtOnce);
+    dvRtOnce='';
+    if(dvTokenValid()) scheduleDvRenew();
+    refreshDvBanner();
+  }
 });
 
 /* ============================================================
