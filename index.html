@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.29 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.30 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.29</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.30</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.29 (2026-10-02) | 過去SI参照: 同一バイヤー×同一銀行のみ（初回銀行は参照なし）</span>
+  <span>LEENEAR CORPORATION — v2.30 (2026-10-06) | 過去SI参照: LC番号の形式で同一銀行を自動判定（マスター登録不要）</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -856,9 +856,9 @@ const SYS=`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
 内部ルール: LC番号「DATED ON 日付」形式/COUNTRY OF ORIGIN:JAPAN・FREIGHT PREPAID はデフォルト自動出力/ADVISING BANK=SMBC/1コンテナ1アイテム`;
 
 /* ============================================================
-   SECTION: BUYER_BANK_MASTER
-   ⚠️ 이 블록만 수정하면 전체 Buyer/은행 패턴이 업데이트됨
-   추후 Dataverse 마스터テーブル化 or JSON 외부화 예정
+   SECTION: BUYER_BANK_MASTER （参考データ）
+   ⚠️ v2.30〜 同一銀行の判定には使用しない（下の lcNumberShape / detectBankGroup を参照）。
+      旧マスターは参考情報として残置。新しい銀行を登録する必要はない。
 ============================================================ */
 const BUYER_BANK_MASTER = {
   "A":  { name:"PT. ASPEX KUMBONG",            banks:[{bankName:"WOORI BANK Indonesia",  prefixes:["ILC"]},{bankName:"その他",prefixes:["ILTEB"]}]},
@@ -899,18 +899,26 @@ function extractBuyerCode(scNo) {
 }
 
 // LC번호에서 은행 그룹 판별 (normalize 있으면 연도 무관 동일 그룹)
-function detectBankGroup(lcNo, buyerCode) {
-  const master = BUYER_BANK_MASTER[buyerCode];
-  if (!master) return null;
-  const lcBase = String(lcNo || '').split(' DATED')[0].trim().toUpperCase();
-  for (const bank of master.banks) {
-    for (const pfx of bank.prefixes) {
-      if (lcBase.startsWith(pfx.toUpperCase())) {
-        return bank.normalize || pfx;
-      }
-    }
-  }
-  return null;
+/* ------------------------------------------------------------
+   v2.30 PR#1-2: 同一銀行の自動判定（マスター登録不要）
+   「同一銀行」＝ LC番号の形式（数字を # に置換した文字列）が一致すること。
+     例) LI26B03857 / LI25B04339 → どちらも "LI##B#####" ＝同一銀行
+         BID0926ILU365245        → "BID####ILU######" ＝別形式（初回なら参照なし）
+   ・過去SIは必ず「同一バイヤー」の中で比較するため、他バイヤーの番号とは混ざらない
+   ・初回銀行は参照なし → そのSIがCOMPASSに保存された次回から自動で参照される
+   ・形式が違っても同一銀行として扱いたい例外のみ BANK_SHAPE_ALIASES に追記する
+     （例: {'MI###########':'MI_EXIM', 'MI########XXX':'MI_EXIM'}）
+------------------------------------------------------------ */
+const BANK_SHAPE_ALIASES = {};
+function lcNumberShape(lcNo) {
+  const base = String(lcNo || '').split(' DATED')[0].replace(/\s+/g, '').toUpperCase();
+  if (base.length < 5) return '';              // 空・短すぎる番号は判別不能
+  return base.replace(/[0-9*]/g, '#');         // 数字とマスク(*)を # に統一
+}
+function detectBankGroup(lcNo, buyerCode) {    // buyerCode は互換のため残す（判定には不使用）
+  const shape = lcNumberShape(lcNo);
+  if (!shape) return null;
+  return BANK_SHAPE_ALIASES[shape] || shape;
 }
 
 /* ------------------------------------------------------------
@@ -932,12 +940,12 @@ function pastSiNoRefMessage(info){
     case 'NO_BUYER':
       return '⚠️ 契約番号からバイヤーコードを判別できないため、過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。';
     case 'NO_BANK_GROUP':
-      return `🆕 <strong>初回銀行 / 銀行マスター未登録</strong>（LC番号: ${lc}）— 過去SIは参照せず、<strong>LC原文のみ</strong>で作成しています。`+
-             `<br><span style="opacity:.85">※ 銀行マスターに登録すると、次回から同一銀行の過去SIが参照されます。</span>`;
+      return `⚠️ LC番号（${lc || '未入力'}）を判別できないため、過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
     case 'NO_SAME_BANK_SI':
-      return `ℹ️ 同一バイヤー(${bc}) × 同一銀行(${bg})の過去SIがありません — 過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
+      return `🆕 <strong>初回銀行 / 新しいLC番号形式</strong>（LC番号: ${lc} / 形式: ${bg}）— 同一バイヤー(${bc})に同じ形式の過去SIがないため、過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`+
+             `<br><span style="opacity:.85">※ このSIがCOMPASSに保存されると、次回から同じ形式のLCで参照されます。</span>`;
     case 'NO_RECENT_SI':
-      return `ℹ️ 同一バイヤー(${bc}) × 同一銀行(${bg})の直近3ヶ月以内の過去SIがありません — 過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
+      return `ℹ️ 同一バイヤー(${bc}) × 同一LC番号形式(${bg})の直近3ヶ月以内の過去SIがありません — 過去SIは参照せず<strong>LC原文のみ</strong>で作成しています。`;
     case 'NO_PAST_SI':
       return `ℹ️ 同一バイヤー(${bc})の過去SIがありません — <strong>LC原文のみ</strong>で作成しています。`;
     default:
@@ -976,7 +984,7 @@ function pickExcelPastSIs(lc, data, now){
     return cn !== contractNo && extractBuyerCode(cn) === buyerCode;
   });
   if(!byBuyer.length){ out.reason='NO_PAST_SI'; return out; }
-  // 銀行: マスター基準の銀行グループ一致（LC番号の先頭N文字比較は使わない）
+  // 銀行: LC番号の形式(数字→#)が一致するもののみ（detectBankGroup）
   const byBank = byBuyer.filter(r => detectBankGroup(String(r[K.LC]||''), buyerCode) === bankGroup);
   if(!byBank.length){ out.reason='NO_SAME_BANK_SI'; return out; }
 
@@ -1174,9 +1182,9 @@ async function dvGet(path) {
 
 // 過去SI取得 (Phase3で呼び出す)
 async function fetchPastSIs(contractNo, lcNo) {
-  // ── v2.29 PR#1: 過去SI参照は「同一バイヤー × 同一銀行」が確実に識別できた場合のみ ──
-  //   ・銀行グループが特定できない(初回銀行/マスター未登録)場合は参照しない（全銀行へのフォールバック禁止）
-  //   ・同一銀行の過去SIが無い場合も参照しない（全銀行へのフォールバック禁止）
+  // ── v2.29 PR#1 / v2.30 PR#1-2: 過去SI参照は「同一バイヤー × 同一銀行(LC番号の形式一致)」の場合のみ ──
+  //   ・LC番号が判別できない場合は参照しない
+  //   ・同一形式(=同一銀行)の過去SIが無い場合(初回銀行)も参照しない（全銀行へのフォールバック禁止）
   //   ・バイヤーはContract番号から抽出したコードの完全一致のみ（contains部分一致による他バイヤー混入を排除）
   pastSiRefInfo = {reason:'', buyerCode:null, bankGroup:null, lcNo:lcNo||''};
   if(!dvTokenValid()) return [];
@@ -3613,7 +3621,7 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
     const noRefMsg = dvTokenValid() ? pastSiNoRefMessage(info) : '';
     statusEl.textContent = dvTokenValid() ? (noRefMsg ? '参照なし' : '該当なし') : '未ログイン';
     bankEl.textContent   = (dvTokenValid() && info.buyerCode)
-      ? `Buyer: ${info.buyerCode} × Bank: ${info.bankGroup || '未識別'}`
+      ? `Buyer: ${info.buyerCode} × LC形式: ${info.bankGroup || '—'}`
       : '';
     contentEl.innerHTML  = dvTokenValid()
       ? (noRefMsg
@@ -3627,7 +3635,7 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
 
   statusEl.textContent = `✅ ${pastSIs.length}件取得済`;
   bankEl.textContent   = bankGroup
-    ? `Buyer: ${buyerCode||'—'} × Bank: ${bankGroup}`
+    ? `Buyer: ${buyerCode||'—'} × LC形式: ${bankGroup}`
     : `Buyer: ${buyerCode||'—'}`;
 
   const ALL_FIELDS = [
