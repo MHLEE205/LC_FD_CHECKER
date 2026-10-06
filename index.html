@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.30 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.32 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.30</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.32</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.30 (2026-10-06) | 過去SI参照: LC番号の形式で同一銀行を自動判定（マスター登録不要）</span>
+  <span>LEENEAR CORPORATION — v2.32 (2026-10-06) | AI反映ルール: LC原文で決まる値は規則ベースが最終・AIは空欄のみ補完</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -1285,6 +1285,7 @@ let selectedTtContract=null; // TT 모드에서 선택한 계약번호
 // SI COMPASS state
 let compLcData=null;
 let siVals={}, siVals2={};
+let siLockConsignee=false;   // v2.32: LC 46A に TO ORDER OF 指定があれば規則ベースを固定（AIで上書きしない）
 let compAiDone=false;
 let compVnMode=false;
 let compVnTab=1;
@@ -3840,6 +3841,36 @@ function renderAiNote(ai, sourceLabel) {
 }
 
 /* 過去SI参照でフォーム改善 — Phase3: Dataverse優先/Excel폴백 */
+/* ------------------------------------------------------------
+   v2.32: AI反映ルール（LC原文準拠）
+   ・LC原文で決まる値（支払期限・支払条件・POD1・Consignee(TO ORDER OF〜)）は規則ベースが最終。AIの値は使わない
+   ・それ以外は「規則ベースが空欄のときだけ」AIが補完
+   ・LC条件から作る記載文句（blText1/all/invoiceText/beneText）は、4桁以上の数字がLCに存在しない場合（過去SIの番号の流用）は採用しない
+------------------------------------------------------------ */
+const SI_AI_FILL_FIELDS     = ['consignee','notifyParty','address','tel','fax','blText1','all','invoiceText','beneText'];
+const SI_AI_GROUNDED_FIELDS = ['blText1','all','invoiceText','beneText'];
+function consigneeFromLcWording(lc){
+  const raw = String((lc && lc.consignee46A) || '');
+  return /TO\s+(?:THE\s+)?ORDER\s+OF/i.test(raw);      // parseConsignee の「LC文言を使う分岐」と同じ判定
+}
+function aiNumbersGrounded(text, lcText){
+  const compact = lcText.replace(/[\s.\-]/g,'');
+  return (String(text).match(/\d{4,}/g) || []).every(t => lcText.includes(t) || compact.includes(t));
+}
+function applyAiSiValues(ai, lc){
+  const applied = [], kept = [], rejected = [];
+  const lcText = JSON.stringify(lc || {});
+  for(const f of SI_AI_FILL_FIELDS){
+    const v = ai && ai[f];
+    if(!v || !String(v).trim() || /^[X\s]+$/i.test(String(v))) continue;          // 空 / 「XX」だけの無意味な値は採用しない
+    if(f === 'consignee' && siLockConsignee){ kept.push(f); continue; }
+    if(String(siVals[f]||'').trim() !== ''){ kept.push(f); continue; }          // 規則ベースに値あり → 維持
+    if(SI_AI_GROUNDED_FIELDS.includes(f) && !aiNumbersGrounded(v, lcText)){ rejected.push(f); continue; }
+    siVals[f] = v; applied.push(f);
+    if(compVnMode && siVals2 && f === 'all' && !String(siVals2.all||'').trim()) siVals2.all = v;
+  }
+  return {applied, kept, rejected};
+}
 async function runSiRefImprove(lc, pastSIs){
   const noteEl=document.getElementById('compAiNote');
 
@@ -3861,7 +3892,9 @@ Payment Deadline: ${si.crcf9_payment_deadline||''}
 Payment Terms: ${si.cr49f_payment_terms||''}
 POD1: ${si.crcf9_place_of_delivery_1||''}
 BL Text1: ${si.crcf9_bl_text1||''}
-ALL: ${si.crcf9_all||''}`).join('\n');
+ALL: ${si.crcf9_all||''}
+InvoiceText: ${si.crcf9_invoicetext||''}
+BeneText: ${si.crcf9_bencert_text||''}`).join('\n');
     refNos=pastSIs.map(si=>si._sc_no||'').filter(Boolean).join('、');
   } else {
     // Excel 폴백 (siRefData) — v2.29 PR#1: Dataverse経路と同一ルール（同一バイヤー×同一銀行のみ）
@@ -3890,7 +3923,9 @@ Payment Deadline: ${r['cr49f_s_i.crcf9_payment_deadline']||''}
 Payment Terms: ${r['cr49f_s_i.cr49f_payment_terms']||''}
 POD1: ${r['cr49f_s_i.crcf9_place_of_delivery_1']||''}
 BL Text1: ${r['cr49f_s_i.crcf9_bl_text1']||''}
-ALL: ${r['cr49f_s_i.crcf9_all']||''}`).join('\n');
+ALL: ${r['cr49f_s_i.crcf9_all']||''}
+InvoiceText: ${r['cr49f_s_i.crcf9_invoicetext']||''}
+BeneText: ${r['cr49f_s_i.crcf9_bencert_text']||''}`).join('\n');
     refNos=recentSi.map(r=>r[CN_KEY]||'').filter(Boolean).join('、');
   }
 
@@ -3900,20 +3935,25 @@ ALL: ${r['cr49f_s_i.crcf9_all']||''}`).join('\n');
   try{
     const raw=await callApi([{role:'user',content:[{type:'text',text:
 `あなたはLEENEAR CORPORATIONの貿易書類SI入力専門家です。
-過去SIの実績と新しいLC条件を基に、COMPASS SIフォームに入力する完成した値をJSONで返してください。
+過去SIの実績と新しいLC条件を基に、COMPASS SIフォームの「補完値」をJSONで返してください。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 【絶対原則】LC条件は絶対に守ること。LC条件を超えることは一切禁止。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【出力方針: 完成SI作成】
-「LC条件との差異分析」ではなく「このLCに対する完成した値」を直接出力すること。
-- LC固有値（日付・LC番号・金額等）は新LCから正確に取得
-- 書式・フォーマットは過去SIの実績を参考にする
-- 不明な値は「XX」を記入（空欄は不可）
+【役割分担】
+- 支払期限・支払条件・POD1・Consignee（TO ORDER OF〜の指定がある場合）は、LC原文からツールが確定済みのため出力不要。
+- あなたの役割は ① LC原文だけでは決まらない値（Notify Party / Address / TEL / FAX）の補完、
+  ② LC条件から作る記載文句（blText1 / all / invoiceText / beneText）の作成。
+
+【出力方針】
+- 過去SIは「書式（改行・記載順・表記スタイル）」と「買主固有の連絡先（TEL/FAX/住所）」の参考にのみ使うこと。
+- LC固有の値（番号・日付・金額・数量・住所・ORDER NO・LICENCE NO・TAX ID・HS CODE等）は必ず新LCの記載から取得し、
+  過去SIの値をコピーしてはならない。新LCに該当する条件がない記載文句は空文字を返すこと。
+- 船積時に確定する数量・重量などLCから取得できない値のみ「XX」を記入する（blText1）。
 
 【COMPASSフィールドの役割】
-- Consignee : 荷受人（LC 46A指定通り）
+- Consignee : 荷受人（LC 46A指定通り。TO ORDER OF〜の指定があれば空文字）
 - Notify Party : 会社名のみ（住所・TEL・FAXは含めない）
 - Address : 住所・EMAIL・TAX ID等（Notify Partyの連絡先情報）
 - TEL / FAX : 別フィールドに分けて入力
@@ -3921,22 +3961,19 @@ ALL: ${r['cr49f_s_i.crcf9_all']||''}`).join('\n');
 【LC情報優先ルール — 厳守】
 ① Applicant住所が記載されている場合、過去SI実績に関わらず必ずその住所をaddressに使用すること。過去SI住所の流用禁止。
 ② 47A追加条件のORDER NOは必ずblText1・allに反映すること。過去SIのORDER NOを流用することは絶対禁止。
-③ 運賃条件（CIF/FOB等）はpaymentTermsに正確に反映すること。
 
 === 新しいLC情報 ===
 LC番号: ${lc.lcNo||''} DATED ON ${lc.lcDate||''}
 Applicant(会社名): ${(lc.applicant||'').slice(0,200)}
 Applicant住所(★必ずaddressに使用): ${(lc.applicantAddress||'未記載').slice(0,300)}
-Consignee(46A): ${(lc.consignee46A||'').slice(0,200)}
-NotifyParty(46A)指示文: ${(lc.notifyParty46A||'').slice(0,200)}
-POL(44E): ${lc.pol||''}
-POD(44F): ${lc.pod||''}
-商品(45A): ${(lc.commodity45A||'').slice(0,200)}
-支払(42C): ${lc.term42C||''}
+Consignee(46A): ${(lc.consignee46A||'').slice(0,600)}
+NotifyParty(46A)指示文: ${(lc.notifyParty46A||'').slice(0,600)}
+46A要求書類:
+${((lc.docs46A||[]).join('\n')||'なし').slice(0,3000)}
+商品(45A): ${(lc.commodity45A||'').slice(0,1500)}
 運賃条件: ${lc.freightCondition||''}
-分割船積(43P): ${lc.partialShipment||''}
-積替(43T): ${lc.transhipment||''}
-47A追加条件(★ORDER NO等 必読・blText1/allに反映): ${(lc.addCond47A||'なし').slice(0,500)}
+47A追加条件(★ORDER NO等 必読・blText1/allに反映):
+${(lc.addCond47A||'なし').slice(0,4000)}
 国: ${lc.country||''}
 
 === 過去SI実績（${sourceLabel}）===
@@ -3944,24 +3981,19 @@ ${siSummary}
 
 【出力形式】JSONのみ。前置き・コードブロック不要。
 {
-  "consignee":       "完成値",
+  "consignee":       "完成値（46AにTO ORDER OF指定がある場合は空文字）",
   "notifyParty":     "完成値（会社名のみ）",
   "address":         "完成値",
   "tel":             "完成値",
   "fax":             "完成値",
-  "paymentDeadline": "完成値",
-  "paymentTerms":    "完成値",
-  "pod1":            "完成値",
   "blText1":         "完成値",
-  "all":             "完成値",
-  "invoiceText":     "完成値",
+  "all":             "完成値（該当条件がなければ空文字）",
+  "invoiceText":     "完成値（該当条件がなければ空文字）",
   "beneText":        "完成値（不要なら空文字）",
   "refSiNos":        ["参照SI契約番号1", "参照SI契約番号2"],
   "confidence":      "high/medium/low",
   "items": [
     {"icon": "👤", "label": "Consignee / Notify / Address / TEL / FAX", "note": "判断根拠を1〜2文で（日本語）"},
-    {"icon": "💳", "label": "支払期限 / 支払条件", "note": "判断根拠"},
-    {"icon": "🚢", "label": "POD", "note": "判断根拠"},
     {"icon": "📄", "label": "BL Text", "note": "判断根拠"},
     {"icon": "📋", "label": "ALL / InvoiceText / BeneCert", "note": "判断根拠"}
   ]
@@ -3972,22 +4004,17 @@ ${siSummary}
     if(!jm) return;
     const ai=JSON.parse(jm[0]);
 
-    if(ai.consignee)       siVals.consignee=ai.consignee;
-    if(ai.notifyParty)     siVals.notifyParty=ai.notifyParty;
-    if(ai.address)         siVals.address=ai.address;
-    if(ai.tel)             siVals.tel=ai.tel;
-    if(ai.fax)             siVals.fax=ai.fax;
-    if(ai.paymentDeadline) siVals.paymentDeadline=ai.paymentDeadline;
-    if(ai.paymentTerms)    siVals.paymentTerms=ai.paymentTerms;
-    if(ai.pod1)            siVals.pod1=ai.pod1;
-    if(ai.blText1)         siVals.blText1=ai.blText1;
-    if(ai.all)             siVals.all=ai.all;
-    if(ai.invoiceText)     siVals.invoiceText=ai.invoiceText;
-    if(ai.beneText)        siVals.beneText=ai.beneText;
-    if(compVnMode&&siVals2){ if(ai.all) siVals2.all=ai.all; }
+    // v2.32: LC原文で決まる値は規則ベースが最終。AIは空欄のみ補完（詳細は applyAiSiValues）
+    const applyRes=applyAiSiValues(ai, lc);
     renderCompFormContent();
 
     renderAiNote(ai, sourceLabel);
+    if(noteEl){
+      noteEl.insertAdjacentHTML('beforeend',
+        `<div class="alert alert-info" style="margin-top:5px;font-size:.78rem;line-height:1.5;">ℹ️ LC原文で決まる項目（支払期限・支払条件・POD1・Consignee(TO ORDER OF)）はLC原文のまま。` +
+        `AI補完（空欄のみ）: ${applyRes.applied.length?esc(applyRes.applied.join(', ')):'なし'}` +
+        `${applyRes.rejected.length?` ／ LCに存在しない番号を含むため不採用: ${esc(applyRes.rejected.join(', '))}`:''}</div>`);
+    }
   }catch(e){
     if(noteEl) noteEl.innerHTML=`<div class="alert alert-warn">⚠️ 過去SI参照に失敗しました。手動で確認してください。</div>`;
   }
@@ -4079,24 +4106,99 @@ function buildVNAddress1(lc){
 function buildVNConsignee2(lc){const tax=parseTaxCode(lc);const lic=parseImportLicence(lc);const company=lc.applicant||parseNPName(lc.notifyParty46A||'');const marker=lc.localAgentRequired?'*':'';return[tax,lic,'DEPOSIT',company+marker].filter(Boolean).join('#');}
 function buildVNBLText1(lc){const hs=(lc.commodity45A||'').match(/HS\s*CODE[:\s#]+([0-9\s.]+)/i);const hsCode=hs?hs[1].trim().replace(/\s+/g,''):'XXXXX';return`WASTE PAPER#${hsCode}#XXKGS#XXBALES\nDEPOSIT NUMBER: XXX`;}
 function buildVNBLText2(lc){const addr=lc.applicantAddress||'';const fax=parseNPFax(lc.notifyParty46A||'');const tel=parseNPTel(lc.notifyParty46A||'');return['*',addr,tel,fax].filter(Boolean).join('#');}
+/* ------------------------------------------------------------
+   v2.31 PR#2: LC原文準拠パーサー
+   原則: LCの文言はそのまま使う。調整してよいのは「前後」（項目名・区切り記号・案内文言）のみで、
+         文言の中身（語順・略語化・語の追加/削除・スペース）は変更しない。
+------------------------------------------------------------ */
+// 支払期限 = 42C の文言そのまま。
+//   前: 項目名の残り「DRAFT(S) AT」を除去
+//   後: AI追記（SWIFTは em/en dash を使えないため「—」以降はAI追記）・DRAWEE情報・案内文言「AGAINST…」「UNLESS…」・末尾の句読点を除去
 function parsePaymentDeadline(term42C){
-  if(!term42C)return'';const t=term42C.toUpperCase();
-  if(/^AT SIGHT/.test(t)||t==='AT SIGHT')return'AT SIGHT FOR 100PCT INVOICE VALUE';
-  const dm=t.match(/(\d+)\s*DAYS?\s*(AFTER\s+(?:SHIPMENT\s+DATE|BILL\s+OF\s+LADING|B\/L|B\.L\.))/i);
-  if(dm)return`${dm[1]} DAYS ${dm[2].replace(/BILL\s+OF\s+LADING/i,'B/L').replace(/SHIPMENT\s+DATE/i,'SHIPMENT DATE').trim()} FOR 100PCT OF INVOICE VALUE`;
-  const dm2=t.match(/PAID\s+AT\s+(\d+)\s+DAYS\s+AFTER\s+(\w+)/i);if(dm2)return`AT ${dm2[1]} DAYS AFTER ${dm2[2]} DATE FOR 100PCT OF INVOICE VALUE`;
-  const dm3=t.match(/(\d+)\s*DAYS?\s*AFTER\s*SIGHT/i);if(dm3)return`${dm3[1]} DAYS AFTER SIGHT FOR 100PCT INVOICE VALUE`;
-  return term42C.replace(/\n/g,' ').slice(0,120);
+  if(!term42C) return '';
+  let t = String(term42C).replace(/\s+/g,' ').trim();
+  t = t.replace(/^DRAFTS?(?:\(S\))?\s+AT\s+/i,'');
+  t = t.replace(/\s*[\u2014\u2013].*$/,'');
+  t = t.replace(/\s+(?:DRAWEE|AGAINST|UNLESS)\b.*$/i,'');
+  return t.replace(/[\s.;,]+$/,'');
 }
 function parsePaymentMethod(term42C){if(!term42C)return'';const t=term42C.toUpperCase();if(/^AT SIGHT/.test(t)||t==='AT SIGHT')return'AT SIGHT';const m=t.match(/(\d+)\s*DAYS?/);return m?m[1]:'';}
-function parsePaymentTerms(lc){
-  const c45=lc.commodity45A||'';
-  const m=c45.match(/UNIT\s*PRICE[:\s]+[A-Z]*\s*[\d.,]+\/[A-Z]+\s+((?:CIF|FOB|CFR|CNF|DAP|DDP|FCA)\s+[^\n]+)/i);if(m)return m[1].trim();
-  const m3=c45.match(/U\/P[:\s]*[A-Z]*\s*[\d.,]+\/[A-Z]+\s+((?:CIF|FOB|CFR|CNF)[^\n]+)/i);if(m3)return m3[1].trim();
-  for(const l of c45.split(/\n/).map(l=>l.trim())){if(/^(?:CIF|FOB|CFR|CNF|DAP|DDP|FCA)\s+/i.test(l))return l.trim();}
-  return'';
+// ── 45A を行単位の項目に分解（改行 / AI整形の「 / 」区切り / 「+」箇条書き に対応）──
+const L45A_LABELS = 'COMMODITY|DESCRIPTION\\s+OF\\s+GOODS|SPECIFICATIONS?|HS\\s*CODE|QUANTITY|UNIT\\s*PRICE|TOTAL\\s*AMOUNT|AMOUNT|COUNTRY\\s+OF\\s+ORIGIN|ORIGIN|TRADE\\s*TERMS?|PRICE\\s*TERMS?|DELIVERY\\s*TERMS?|INCOTERMS?|PACKING|OTHER\\s+DETAILS?';
+function normLabel45A(l){ return String(l).toUpperCase().replace(/\s+/g,'').replace(/S$/,''); }
+function split45A(text){
+  let t = String(text||'').replace(/\r/g,'');
+  if(!t.trim()) return [];
+  // AI整形の「 / 」区切りは、直後が項目名の場合のみ改行に戻す（文言中の ' / ' は壊さない）
+  t = t.replace(new RegExp('\\s+\\/\\s+(?=(?:'+L45A_LABELS+')\\s*:|OTHER\\s+DETAILS?\\b|AS\\s+PER\\b)','gi'),'\n');
+  const lblRe    = new RegExp('^(\\+\\s*)?('+L45A_LABELS+')\\s*:\\s*(.*)$','i');
+  const comRe    = /^(\+\s*)?(COMMODITY)\s+(\S.*)$/i;        // 「COMMODITY WASTE PAPER」（コロンなし）
+  const bulletRe = /^\+\s*(.*)$/;
+  const items = []; let blank = false;
+  for(const raw of t.split('\n')){
+    const ln = raw.trim();
+    if(!ln){ blank = true; continue; }
+    let m, it;
+    if((m = ln.match(lblRe)))         it = {label:normLabel45A(m[2]), value:m[3], bullet:!!m[1]};
+    else if((m = ln.match(comRe)))    it = {label:'COMMODITY', value:m[3], bullet:!!m[1]};
+    else if((m = ln.match(bulletRe))) it = {label:'', value:m[1], bullet:true};
+    else                              it = {label:'', value:ln, bullet:false};
+    it.blankBefore = blank; blank = false; items.push(it);
+  }
+  // 前後のみ整える（連続スペース→1スペース、末尾の区切り記号除去）。文言の中身は変えない
+  return items.map(i=>({...i, value:i.value.replace(/\s+/g,' ').replace(/[\s\/+]+$/,'').trim()}));
 }
-function parseProductName(c45){if(!c45)return'';for(const l of c45.split(/\n/).map(l=>l.trim()).filter(Boolean)){if(/^COMMODITY[:\s]/i.test(l))return l.replace(/^COMMODITY[:\s]*/i,'').trim();if(/^(WASTE PAPER|USED|OLD|ALUMINUM|RECYCL)/i.test(l)&&!/^(HS CODE|QUANTITY|UNIT PRICE|TOTAL|PACKING|COUNTRY|SPECIF)/i.test(l))return l;}return c45.split(/\n/)[0]||'';}
+// 折返し・続き行（例: 「CIF JAKARTA, INDONESIA」の次行「INCLUDING THC IN …」）を連結。項目名・箇条書き・空行・数量行・別項目で打ち切る
+function termBlock45A(items, idx){
+  let v = items[idx].value;
+  for(let j = idx+1; j < items.length; j++){
+    const n = items[j];
+    if(n.label || n.bullet || n.blankBefore) break;
+    if(/^(?:OTHER\s+DETAILS?|AS\s+PER)\b/i.test(n.value)) break;
+    if(/^\d[\d,. ]*\s*(?:MTS?|KGS?)\b/i.test(n.value) || /\bU\/P\b/i.test(n.value)) break;
+    if(/^[A-Z][A-Z' \/]{2,40}:/.test(n.value)) break;
+    v += ' ' + n.value;
+  }
+  return v;
+}
+// 45A項に無い場合の予備: rawText の 45A 区間
+function extract45AFromRaw(raw){
+  if(!raw) return '';
+  const m = String(raw).match(/\(45A\)\s*:?[^\n]*\n([\s\S]*?)(?=\n[-=]{5,}\s*\nDOCUMENTS REQUIRED|\nDOCUMENTS REQUIRED|\(46A\))/i);
+  return m ? m[1].replace(/^[\s\-=]+/,'') : '';
+}
+// 支払条件 = 45A の TRADE TERM（等）の文言そのまま。抽出できない場合は空（過去SI・AIでは補完しない）
+const L45A_TERM_KEYS = ['TRADETERM','PRICETERM','DELIVERYTERM','INCOTERM'];
+const INCOTERM_RE    = /^(?:CIF|CFR|CNF|C&F|FOB|FCA|CPT|CIP|DAP|DPU|DDP|EXW|FAS)\b/i;
+const INLINE_TERM_RE = /[\d.,]+\s*\/\s*[A-Z]+\s+((?:CIF|CFR|CNF|C&F|FOB|FCA|DAP|DDP)\b.+)$/i;
+function parsePaymentTerms(lc){
+  const texts = [lc.commodity45A||''];
+  const rawSec = extract45AFromRaw(lc.rawText); if(rawSec) texts.push(rawSec);
+  for(const c45 of texts){
+    if(!c45) continue;
+    const items = split45A(c45);
+    // ① 項目名つき（TRADE TERM / PRICE TERM / DELIVERY TERM / INCOTERMS）
+    let idx = items.findIndex(i => L45A_TERM_KEYS.includes(i.label) && /[A-Z]{3}/i.test(i.value));
+    if(idx >= 0) return termBlock45A(items, idx);
+    // ② 項目名なしで CIF / FOB … から始まる行
+    idx = items.findIndex(i => !i.label && INCOTERM_RE.test(i.value));
+    if(idx >= 0) return termBlock45A(items, idx);
+    // ③ 単価と同じ行に続く「… /MT CIF …」
+    for(const i of items){ const m = i.value.match(INLINE_TERM_RE); if(m) return m[1].trim(); }
+  }
+  return '';
+}
+// 品名 = 45A の COMMODITY 項目の値そのまま（数量・単価など後続項目は含めない）
+function parseProductName(c45){
+  if(!c45) return '';
+  const items = split45A(c45);
+  let hit = items.find(i => (i.label==='COMMODITY' || i.label==='DESCRIPTIONOFGOOD') && i.value);
+  if(hit) return hit.value;
+  hit = items.find(i => !i.label && !i.bullet && /^(WASTE PAPER|USED|OLD|ALUMINUM|RECYCL)/i.test(i.value));   // 項目名なし形式（行頭が品名）
+  if(hit) return hit.value;
+  hit = items.find(i => !i.label && i.value);
+  return hit ? hit.value : '';
+}
 function parseQuantity(c45){if(!c45)return'';const m=c45.match(/QUANTITY[:\s]+([\d,]+\.?\d*)\s*MT/i)||c45.match(/([\d,]+\.?\d*)\s*MT\s+(?:U\/P|UNIT PRICE|@)/i);return m?m[1].replace(/,/g,''):''}
 function parseUnitPrice(c45){if(!c45)return'';const m=c45.match(/UNIT\s*PRICE[:\s]+[A-Z]*\s*([\d,]+\.?\d*)\s*\/MT/i)||c45.match(/U\/P\s*[:\s]*[A-Z]*\s*([\d,]+\.?\d*)\s*\/MT/i);return m?m[1].replace(/,/g,''):''}
 function parseHSCode(c45){if(!c45)return'';const m=c45.match(/H[\/S]\s*(?:CODE)?[:\s]+([\d\s.]+)/i)||c45.match(/HS\s*CODE[:\s]+([\d\s.]+)/i);return m?'HS CODE: '+m[1].trim().replace(/\s+/g,''):''}
@@ -4135,6 +4237,7 @@ function parseMultiGoods(lc){
 ============================================================ */
 function autoMap(){
   if(!compLcData)return;const lc=compLcData;
+  siLockConsignee=consigneeFromLcWording(lc);
   const pods=parsePOD(lc.pod);const lcNo=buildLCNo(lc);const np=lc.notifyParty46A||'';const c45=lc.commodity45A||'';
   const multiGoods=parseMultiGoods(lc);window._multiGoods=multiGoods.length>=2?multiGoods:null;
   siVals={lcNo,contractNo:lc.contractNo||'',classification:'LC',localAgent:lc.localAgentRequired?'True':'False',shippingMark:'',remark:'',poNo:'',voNo:'',
@@ -4149,6 +4252,7 @@ function autoMap(){
   compAiDone=true;
 }
 function autoMapTT(){
+  siLockConsignee=false;
   const d=ttData;const pods=parsePOD(d.pod);const con=d.buyer+(d.buyerAddr?'\n'+d.buyerAddr:'');
   siVals={lcNo:'',consignee:con,notifyParty:d.buyer,address:d.buyerAddr,tel:d.tel,fax:d.fax,pod1:pods.pod1,pod2:pods.pod2,pod3:pods.pod3,portOfDischarge:'',paymentDeadline:d.deadline,paymentTerms:d.terms,paymentMethod:d.pm,classification:d.classification,localAgent:'False',shippingMark:'',blText1:'',blText2:'',all:'',invoiceText:buildInvoiceTextTT(d.country),beneText:'',remark:'',productname:'',weight:'',price:'',hscode:'',contractNo:d.contractNo};
   if(compVnMode){siVals2={...siVals,consignee:'',notifyParty:'',address:d.buyerAddr};}
@@ -4274,13 +4378,13 @@ function renderCompFormContent(){
   html+=siFieldCard({id:'voNo',sfx,vals,label:'VO No',col:'crcf9_vo_no',type:'text',badge:'fb-man',hint:'VO番号（なければ空白）'});
   if(lc){html+=`<div class="si-field f-fix"><div class="si-fhdr"><span class="si-dot si-dot-grey"></span><div><div class="si-flabel">最終船積日（参照）<span class="si-fcol">参照のみ</span></div></div><span class="si-fbadge fb-fix">参照</span></div><div style="font-size:.80rem;color:var(--sub);padding:3px 2px;">📅 有効期限: <strong style="color:var(--warn)">${esc(lc.expiryDate||'-')}</strong> | ✈️ 最終船積: <strong style="color:var(--warn)">${esc(lc.latestShipment||'-')}</strong></div></div>`;}
   html+=siFieldCard({id:'portOfDischarge',sfx,vals,label:'Port Of Discharge（PODと異なる場合）',col:'crcf9_port_of_discharge',type:'text',badge:'fb-auto',hint:'LC44EのPort of DischargeとPort of Deliveryが異なる場合のみ。通常空白。'});
-  html+=siFieldCard({id:'pod1',sfx,vals,label:'1st POD ★',col:'crcf9_place_of_delivery_1',type:'text',badge:'fb-auto',required:true,hint:'主要揚荷港（例: CAT LAI PORT, VIETNAM）',pastVal:PAST_VAL_MAP['pod1']});
+  html+=siFieldCard({id:'pod1',sfx,vals,label:'1st POD ★',col:'crcf9_place_of_delivery_1',type:'text',badge:'fb-auto',required:true,hint:'主要揚荷港（LC 44F の文言のまま）',pastVal:PAST_VAL_MAP['pod1']});
   html+=siFieldCard({id:'pod2',sfx,vals,label:'2nd POD',col:'crcf9_place_of_delivery_2',type:'text',badge:'fb-auto',hint:'複数港の2番目（なければ空白）',pastVal:PAST_VAL_MAP['pod2']});
   html+=siFieldCard({id:'pod3',sfx,vals,label:'3rd POD',col:'crcf9_place_of_delivery_3',type:'text',badge:'fb-auto',hint:'複数港の3番目（なければ空白）'});
   if(lc&&lc.country==='THAILAND')html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark ★★（タイ必須！）',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-req',required:true,hint:'⚠️ タイ向けは必須！',pastVal:PAST_VAL_MAP['shippingMark']});
   else html+=siFieldCard({id:'shippingMark',sfx,vals,label:'Shipping Mark',col:'crcf9_shipping_mark',type:'textarea',rows:2,badge:'fb-man',hint:'タイ向け以外は通常空白',pastVal:PAST_VAL_MAP['shippingMark']});
-  html+=siFieldCard({id:'paymentDeadline',sfx,vals,label:'支払期限 ★★',col:'crcf9_payment_deadline',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'例) 90 DAYS AFTER B/L DATE FOR 100PCT OF INVOICE VALUE',pastVal:PAST_VAL_MAP['paymentDeadline']});
-  html+=siFieldCard({id:'paymentTerms',sfx,vals,label:'支払条件（INCOTERMS）★',col:'cr49f_payment_terms',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'CIF [港名] (...) の形式のみ',pastVal:PAST_VAL_MAP['paymentTerms']});
+  html+=siFieldCard({id:'paymentDeadline',sfx,vals,label:'支払期限 ★★',col:'crcf9_payment_deadline',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'LC 42C の文言のまま（案内文言 AGAINST… は除く）',emptyWarn:(compIsLcMode||vals.lcNo)?'LC 42C から抽出できませんでした — 手入力してください':'',pastVal:PAST_VAL_MAP['paymentDeadline']});
+  html+=siFieldCard({id:'paymentTerms',sfx,vals,label:'支払条件（INCOTERMS）★',col:'cr49f_payment_terms',type:'textarea',rows:2,badge:'fb-auto',required:true,hint:'LC 45A の TRADE TERM の文言のまま（例: CIF [港名] …）',emptyWarn:(compIsLcMode||vals.lcNo)?'LC 45A から抽出できませんでした — 手入力してください':'',pastVal:PAST_VAL_MAP['paymentTerms']});
 
   html+=siSecHdr('⬜','② 中央列 — COMPASS中央カラム');
   if(compIsLcMode||vals.lcNo)html+=siFieldCard({id:'lcNo',sfx,vals,label:'L/C No ★',col:'cr49f_lc_no',type:'text',badge:'fb-auto',required:compIsLcMode,hint:'形式: LC番号 DATED ON MMM DD, YYYY'});
@@ -4369,7 +4473,7 @@ function buildPastHint(id, sfx, currentVal, pastVal) {
   </div>`;
 }
 
-function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required,pastVal}){
+function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required,pastVal,emptyWarn}){
   const val=String(vals[id]||'');const hasVal=val.trim()!=='';
   let dotCls=hasVal?'si-dot-ok':(required?'si-dot-ng':'si-dot-grey');
   if(!hasVal&&badge==='fb-ai')dotCls='si-dot-warn';
@@ -4388,6 +4492,7 @@ function siFieldCard({id,sfx,vals,label,col,type,rows,opts,badge,hint,required,p
     ${inputHtml}
     <div class="copy-row"><button class="copy-btn" id="cc_${id}_${sfx}" onclick="copyCompField('${id}','${sfx}')">📋 コピー</button></div>
     ${hint?`<div class="fi-hint">💡 ${esc(hint)}</div>`:''}
+    ${(!hasVal&&emptyWarn)?`<div class="fi-hint" id="cfw_${id}_${sfx}" style="color:#e8a33d;">⚠️ ${esc(emptyWarn)}</div>`:''}
     ${(pastVal!=null&&pastVal!=='')?buildPastHint(id,sfx,val,pastVal):''}
   </div>`;
 }
@@ -4431,6 +4536,7 @@ function updateCompFieldStyle(id,sfx){
   const v=sfx==='2'?siVals2:siVals;
   const fr=document.getElementById('cfr_'+id+'_'+sfx);if(!fr)return;
   const hasVal=(v[id]||'').trim()!=='';
+  const warnEl=document.getElementById('cfw_'+id+'_'+sfx);if(warnEl)warnEl.style.display=hasVal?'none':'';   // v2.31: 入力されたら警告を消す
   if(fr.className.includes('f-fix'))return;
   if(hasVal){fr.className=fr.className.replace(/f-(ok|warn|ng|opt)/,'f-ok');}
   const dot=fr.querySelector('.si-dot');if(dot){dot.className='si-dot '+(hasVal?'si-dot-ok':(fr.className.includes('f-ng')?'si-dot-ng':'si-dot-grey'));}
