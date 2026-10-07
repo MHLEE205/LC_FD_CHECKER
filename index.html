@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.35 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.36 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.35</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.36</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.35 (2026-10-07) | LC PDF原文復元: SMBC通知PDFの「0」を座標から正確に復元しAIの推測補完を排除</span>
+  <span>LEENEAR CORPORATION — v2.36 (2026-10-07) | 日付の明確化: AIへ渡すLC日付を「NOV 10, 2026」形式に統一（DD/MM↔MM/DDの誤読防止）</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -2050,7 +2050,7 @@ async function analyzeLc(){
     const hasRestored=lcPdfInfo.restored.length>0;
     setStep(['ls1','ls2','ls3'],2);
     document.getElementById('lcMsg').textContent='AI分析中...（30秒〜1分かかります）';
-    const restoreNote=hasRestored?'【PDF原文について】上記のPDFテキストは、PDF内の座標情報から数字「0」を正確に復元した原文です（推測補完なし）。数字・記号・スペースは原文のまま一字一句転記し、スペースの追加・削除・正規化（例:「100PCT」を「100 PCT」にする）や桁数の補正は禁止。JSONの各値も原文の表記を変えずに記載すること。\n\n':'';
+    const restoreNote=hasRestored?'【PDF原文について】上記のPDFテキストは、PDF内の座標情報から数字「0」を正確に復元した原文です（推測補完なし）。数字・記号・スペースは原文のまま一字一句転記し、スペースの追加・削除・正規化（例:「100PCT」を「100 PCT」にする）や桁数の補正は禁止。JSONの各値も原文の表記を変えずに記載すること（日付項目のみ指定のDD/MM/YYYY形式）。\n\n':'';
     const rawTextInstr=allPdfRestored?'（LC全文はPDFから復元した原文を使用するため、RAW_TEXTの出力は不要です）':`上記JSONの直後に以下の形式でLC全文を出力（必須）:
 RAW_TEXT_START
 [ここにLC全文テキストを記載 — 以下を漏れなく含めること]
@@ -2070,9 +2070,9 @@ ${restoreNote}以下のLCを詳細分析し、JSONのみ出力してください
   "contractNo": "${contractNo}",
   "lcNo": "LC番号（完全記載）",
   "lcDate": "発行日（DD/MM/YYYY形式）",
-  "expiryDate": "有効期限",
+  "expiryDate": "有効期限（DD/MM/YYYY形式）",
   "expiryPlace": "有効期限地",
-  "latestShipment": "最終船積日",
+  "latestShipment": "最終船積日（DD/MM/YYYY形式）",
   "country": "仕向国（THAILAND/VIETNAM/INDONESIA/PHILIPPINES/MALAYSIA/OTHERのいずれか）",
   "issuingBank": "発行銀行名",
   "issuingBankCountry": "発行銀行所在国",
@@ -2140,6 +2140,7 @@ ${rawTextInstr}`});
         lcData=JSON.parse(fixed);
       }catch(e2){throw new Error('JSONパースエラー: '+pe.message);}
     }
+    normalizeLcDates(lcData);   // v2.36: 日付3項目をDD/MM/YYYYに統一（原文の表記は rawText に保持）
     if(allPdfRestored){   // v2.35: AIが書き直した全文ではなく、PDFから復元した原文をそのまま保存（以降のACL/FD照合で正確なLC原文を使用）
       lcData.rawText=lcPdfInfo.restored.map(r=>`=== ${r.name} ===\n${r.text}`).join('\n\n');
       lcData.pdfRestore={zeros:lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0), files:lcPdfInfo.restored.map(r=>r.name), restoredAt:new Date().toISOString()};
@@ -2262,8 +2263,8 @@ async function runAmend(){
     const origSummary=`
 既存LCデータ（変更前）:
 LC番号: ${origLc.lcNo||''}
-有効期限: ${origLc.expiryDate||''}
-最終船積日: ${origLc.latestShipment||''}
+有効期限: ${aiDate(origLc.expiryDate)}
+最終船積日: ${aiDate(origLc.latestShipment)}
 金額: ${origLc.amount||''}
 43P(Partial): ${origLc.partialShipment||''}
 43T(Tranship): ${origLc.transhipment||''}
@@ -2294,6 +2295,7 @@ ${origSummary}
      tolerance, partialShipment, transhipment, pol, pod, term42C, commodity45A,
      consignee46A, notifyParty46A, docs46A, addCond47A, freightCondition,
      insuranceCondition, insuranceRatio, presentationDays)
+     ※日付項目（lcDate, expiryDate, latestShipment）はDD/MM/YYYY形式で記載
   },
   "summary": "変更点の概要（日本語）"
 }`}]}],5000);
@@ -2315,6 +2317,7 @@ ${origSummary}
     }
 
     // LC JSON 업데이트
+    normalizeLcDates(result.updatedFields);   // v2.36: 改訂後の日付もDD/MM/YYYYに統一
     Object.assign(origLc,result.updatedFields);
     origLc.amendedAt=new Date().toISOString().slice(0,10);
     lcMap[selAmendLcId]=origLc;
@@ -2368,7 +2371,7 @@ function updFdBtn(){document.getElementById('fdBtn').disabled=!(selLcFd&&fdFiles
 async function runFd(){
   const lcMeta=lcMap[selLcFd];if(!lcMeta){alert('LC情報を読み込めませんでした。');return;}
   const invNo=fdFiles.length>0?extractInvNo(fdFiles[0].name):'';
-  const lcInfo=lcMeta.rawText||formatLc(lcMeta);
+  const lcInfo=lcMeta.rawText||formatLc(aiLcDates(lcMeta));
   const cNote=lcMeta.country==='VIETNAM'?'【VN】BL NOTIFY PARTY税関形式必須。WASTE PAPERはBLにWASTE PAPER#HSCODE#XXKGS#XXBALES DEPOSIT NUMBER:XXX必須。'
     :lcMeta.country==='THAILAND'?'【TH】全書類にSHIPPING MARK必須。':'';
 
@@ -2404,6 +2407,7 @@ RULE-16 保険ICC条件: 保険証券の全ページに「ICC (A)」または「
 RULE-17 全書類船名一致: IV・PL・BL・保険証券に記載された船名（Vessel Name / Ship or Vessel欄）は全書類で完全一致必須。1書類でも異なればNG。
 RULE-18 BL種類判定: LC要求BL種類に応じて以下3パターンで判定すること。①「FULL SET ORIGINAL」要求→ORIGINAL 3/3確認。②「TELEX RELEASED」または「SURRENDERED」要求→SURRENDEREDまたはTELEX RELEASEDの表記があるB/LコピーまたはEWB 3通確認。ORIGINAL B/LにSURRENDEREDスタンプがある場合もOK。ORIGINAL B/LをそのままSURRENDERED扱いにするのは不可。③「NON-NEGOTIABLE SEA WAYBILL」要求→コピー3通確認。
 RULE-19 数値・単位正規化: 体積単位M³・CBM・M3は同一単位として扱い、CFT(立方フィート)とは別単位。DR MEASUREMENTなど体積比較時は単位を統一した上で数値比較すること。単位表記が異なる場合（M³ vs M等）は単位不一致としてWARNで検出。数値と単位が両方一致する場合のみOK。
+RULE-20 日付の読み方: LC・SI基準の日付は「MON DD, YYYY」（例: NOV 10, 2026）の英語月表記で与えられる。日と月を取り違えない（DD/MMとMM/DDを混同しない）。日付の比較は年月日の値で行う。
 ${isDDT_fd?'RULE-10 DDT取引: Shipper≠LEENEAR OK / Consignee=Buyer直接 OK / Notify Party=DDT関連社 OK':''}
 ${isCLC_fd?'RULE-10 CLC取引: Shipper=実運送人(YAMAHATSU等) OK / LEENEARがShipperでなくてもOK':''}
 ${isUC_fd?'RULE-10 SWB取引: Originalの通数チェックをスキップ / BL種類の不一致はOK':''}
@@ -2440,7 +2444,7 @@ NGの場合は確認内容に具体的な不一致を記載。
 【判定の絶対ルール】判定欄と確認内容は必ず一致させること。内容で「一致」「問題なし」と書いたら判定欄も必ずOK。NGは実際に不一致・基準違反がある場合のみ使用。
 
 === INVOICE チェック（項目1〜13）===
-CHECK-1|判定|INVOICE|LC番号記載|「${lcMeta.lcNo||'LC番号'} DATED ON ${lcMeta.lcDate||'発行日'}」の形式でINVOICEに記載されているか（RULE-01: 日付形式の違いはOK）
+CHECK-1|判定|INVOICE|LC番号記載|「${lcMeta.lcNo||'LC番号'} DATED ON ${aiDate(lcMeta.lcDate)||'発行日'}」の形式でINVOICEに記載されているか（RULE-01: 日付形式の違いはOK）
 CHECK-2|判定|INVOICE|42C決済条件|LC 42C決済方式「${(lcMeta.term42C||'').slice(0,50)}」がINVOICEに記載されているか（RULE-02: DRAWEE情報の記載は不要）
 CHECK-3|判定|INVOICE|45A商品説明|INVOICEの商品名がLC 45A商品名と一致するか（RULE-03: 品種コード追加・スペース差異は許容。数量・単価はINVOICE別欄でOK）
 CHECK-4|判定|INVOICE|単価|LC指定単価と完全一致か（通貨・数値・単位）
@@ -2450,7 +2454,7 @@ CHECK-7|判定|INVOICE|INCOTERMS|LC指定（${lcMeta.freightCondition||''}）と
 CHECK-8|判定|INVOICE|COUNTRY OF ORIGIN|JAPAN の記載があるか
 CHECK-9|判定|INVOICE|BENEFICIARY情報|名称・住所が正確か
 CHECK-10|判定|INVOICE|APPLICANT情報|名称・住所がLC指定と完全一致か（LC指定: ${(lcMeta.applicant||'').slice(0,60)}）
-CHECK-11|判定|INVOICE|日付|INVOICE日付がLC有効期限（${lcMeta.expiryDate||''}）内かつ最終船積日（${lcMeta.latestShipment||''}）以前か
+CHECK-11|判定|INVOICE|日付|INVOICE日付がLC有効期限（${aiDate(lcMeta.expiryDate)}）内かつ最終船積日（${aiDate(lcMeta.latestShipment)}）以前か
 CHECK-12|判定|INVOICE|47A全書類記載事項|47A条件で全書類に記載必須の事項がINVOICEに含まれているか
 CHECK-13|判定|INVOICE|言語|英語で記載されているか
 CHECK-13A|判定|INVOICE|PORT記載|INVOICEにPort of Discharge / Port of Loadingが記載されている場合:【STEP-1】BL記載の港名と完全同一か確認。記載がない場合はN/A。不一致の場合NG（RULE-11: CAT LAI / CAI MEP / SP-ITCは相互代替不可）
@@ -2463,7 +2467,7 @@ CHECK-17|判定|BL|FREIGHT条件|LC指定（${lcMeta.freightCondition||'PREPAID'
 CHECK-18|判定|BL|PORT OF LOADING|LC 44E指定（${lcMeta.pol||''}）と一致か
 CHECK-19|判定|BL|PORT OF DISCHARGE|【STEP-1】BL記載のPODとIV・PL・保険証券など全書類の記載が完全同一の港名か確認。書類間で港名が異なる場合は即NG。【STEP-2】STEP-1で確認した港名がLC 44F指定（${lcMeta.pod||''}）の候補に含まれているか確認（LC候補が複数ある場合はいずれか1つで可。LC地名が含まれていればOK）。STEP-1・STEP-2の両方を満たしてOK（RULE-11）
 CHECK-20|判定|BL|ON BOARD表記|CLEAN SHIPPED ON BOARDの表記と日付があるか
-CHECK-21|判定|BL|船積日|LC最終船積日（${lcMeta.latestShipment||''}）以前か（RULE-01: 日付形式差異はOK）
+CHECK-21|判定|BL|船積日|LC最終船積日（${aiDate(lcMeta.latestShipment)}）以前か（RULE-01: 日付形式差異はOK）
 CHECK-22|判定|BL|PARTIAL SHIPMENT|LC 43P（${lcMeta.partialShipment||''}）条件に抵触していないか
 CHECK-23|判定|BL|TRANSHIPMENT|LC 43T（${lcMeta.transhipment||''}）条件に抵触していないか
 CHECK-24|判定|BL|BL種類・通数|LC指定BL要件「${lcMeta.blOriginalCount||'FULL SET 3/3'}」に対しRULE-18で判定: ①FULL SET ORIGINAL要求→ORIGINAL 3/3確認 ②TELEX RELEASED/SURRENDERED要求→SURRENDERED・TELEX RELEASED表記のあるB/L COPY 3通確認（ORIGINAL B/LにSURRENDEREDスタンプがある場合もOK。スタンプなしのOPIGINAL B/Lをそのまま提出は不可）③NON-NEGOTIABLE要求→COPY 3通確認（RULE-12: どのOriginalでも通数充足ならOK。${isUC_fd?'SWB取引のため通数チェックスキップ':''}）
@@ -2984,7 +2988,7 @@ async function runAclCheck(){
     if(!ttSnap){alert('COMPASS ExcelとContract番号を選択してください');return;}
   }
 
-  const lcInfo=isLcMode?(lcMeta.rawText||formatLc(lcMeta)):'';
+  const lcInfo=isLcMode?(lcMeta.rawText||formatLc(aiLcDates(lcMeta))):'';
   const country=isLcMode?lcMeta.country:ttSnap.country;
 
   document.getElementById('aclBtn').disabled=true;
@@ -3008,7 +3012,7 @@ async function runAclCheck(){
 
     // ── 프롬프트 빌드 (LC / TT 분기) ──
     const groupA_LC=`【Group A — ACL ↔ LC 比較】ACLが間違っていればNG（ACLを修正）
-CHECK-A1|判定|GroupA|L/C No.記載|LC要求:「${lcMeta?.lcNo||''} DATED ON ${lcMeta?.lcDate||''}」 / ACL記載:[実際の記載内容または記載なし]
+CHECK-A1|判定|GroupA|L/C No.記載|LC要求:「${lcMeta?.lcNo||''} DATED ON ${aiDate(lcMeta?.lcDate)}」 / ACL記載:[実際の記載内容または記載なし]
 CHECK-A2|判定|GroupA|Consignee|LC要求:「${(lcMeta?.consignee46A||'').slice(0,60)}...」 / ACL記載:[実際の記載内容]
 CHECK-A3|判定|GroupA|Notify Party|LC要求:TAX ID/住所/TEL/FAX含む形式 / ACL記載:[実際の記載内容、不足項目があれば明記]
 CHECK-A4|判定|GroupA|Port of Discharge|LC要求:「${lcMeta?.pod||''}」 / ACL記載:[実際の記載内容]
@@ -3036,7 +3040,7 @@ CHECK-A10|判定|GroupA|Freight条件|FREIGHT PREPAID AS ARRANGED / ACL記載:[�
 CHECK-A11|判定|GroupA|Partial/Transhipment|ACL記載:[実際の積み方・経由有無] → 問題なければOK
 CHECK-A12|判定|GroupA|Original B/L通数|ACLが「Way Bill」の場合はOK（通数概念なし）。Ocean B/Lの場合のみ通常3通と照合:[実際の記載通数または記載なし]`;
 
-    const groupC_LC=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] / LC最終船積日:${lcMeta?.latestShipment||'不明'} → [判定理由]`;
+    const groupC_LC=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] / LC最終船積日:${aiDate(lcMeta?.latestShipment)||'不明'} → [判定理由]`;
     const groupC_TT=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] → 記載があればOK（TT/DPのため期限なし）`;
 
     const baseInfo=isLcMode?`=== LC条件 ===\n${lcInfo}`:`=== SI基準データ（COMPASS） ===
@@ -3064,6 +3068,7 @@ CHECK-番号|判定|グループ|項目名|確認内容
 ★ CHECK行はパイプ区切り形式のみ。マークダウン記法（**等）は絶対使用禁止。
 ★ OKの場合: 「ACL記載: [実際の内容]」/ NGの場合: 「基準: [X] / ACL記載: [Y]」/ WARNの場合: 「[具体的な要確認内容]」
 ★ 「確認済み」「チェック済み」などの無意味な記載は絶対禁止
+★ 日付: LC・SI基準の日付は「MON DD, YYYY」の英語月表記で与えられる。日と月を取り違えず、年月日の値で比較すること。
 ★ CHECK行はSUMMARYより前に全て出力すること
 ★【判定の絶対ルール】判定欄(2列目)と確認内容(5列目)は必ず一致させること。内容で「一致」「問題なし」「OKと訂正」と書いたのに判定欄がNGは絶対禁止。内容でOKと判断したら判定欄も必ずOK。NGは実際に不一致・基準違反がある場合のみ。
 
@@ -3258,14 +3263,15 @@ ACL全体判定: ${loadedAclHistory.overall}`;
 
     const lcConditions=`
 === LC条件スナップショット ===
-L/C No: ${loadedAclHistory.lcNo||''} DATED ON ${lc.lcDate||''}
+L/C No: ${loadedAclHistory.lcNo||''} DATED ON ${aiDate(lc.lcDate)}
 Consignee (46A): ${(lc.consignee46A||'').slice(0,100)}
 Notify Party (46A): ${(lc.notifyParty46A||'').slice(0,100)}
 POD (44F): ${lc.pod||''}
 POL (44E): ${lc.pol||''}
 商品 (45A): ${(lc.commodity45A||'').slice(0,80)}
-最終船積日: ${lc.latestShipment||''}
-国: ${lc.country||''}`;
+最終船積日: ${aiDate(lc.latestShipment)}
+国: ${lc.country||''}
+※LCの日付は「MON DD, YYYY」の英語月表記。日と月を取り違えず、年月日の値で比較すること。`;
 
     const isTtMode=(loadedAclHistory.mode==='tt'||loadedAclHistory.mode==='dp');
     const contractNo_bl=loadedAclHistory.contractNo||'';
@@ -3348,7 +3354,7 @@ CHECK-番号|判定|グループ|項目名|確認内容
 === チェック項目（必ず全項目をCHECK行で出力） ===
 
 【Group A — BL Draft ↔ LC 比較】BL Draftが間違っていればNG
-CHECK-A1|判定|GroupA|L/C No.記載|LC要求:「${loadedAclHistory.lcNo||''} DATED ON ${lc.lcDate||''}」 / BL記載:[実際のBLのL/C No記載内容]（RULE-01: 日付形式差異はOK）
+CHECK-A1|判定|GroupA|L/C No.記載|LC要求:「${loadedAclHistory.lcNo||''} DATED ON ${aiDate(lc.lcDate)}」 / BL記載:[実際のBLのL/C No記載内容]（RULE-01: 日付形式差異はOK）
 CHECK-A2|判定|GroupA|Consignee|LC 46A要求:「${(lc.consignee46A||'').slice(0,60)}...」 / BL記載:[実際のConsignee全文]（RULE-07: Description欄も有効）
 CHECK-A3|判定|GroupA|Notify Party|LC 46A要求形式 / BL記載:[実際のNotify Party、不足項目があれば明記]（RULE-07: TEL/FAXはDescription欄・**以降でもOK）
 CHECK-A4|判定|GroupA|Port of Discharge|【STEP-1】BL記載のPODとACL確認済みPOD・IV・PL等全書類が完全同一の港名か確認。異なる場合は即NG。【STEP-2】STEP-1で確認した港名がLC 44F指定（${lc.pod||''}）の候補に含まれているか確認（LC候補複数の場合はいずれか1つで可）。STEP-1・STEP-2の両方を満たしてOK（RULE-11）
@@ -3358,7 +3364,7 @@ CHECK-A7|判定|GroupA|HS Code / Import Licence|${lc.country==='INDONESIA'?'イ�
 CHECK-A8|判定|GroupA|Freight条件|LC要求:FREIGHT PREPAID AS ARRANGED / BL記載:[実際のFreight記載]
 CHECK-A9|判定|GroupA|Original通数|LC要求通数がBLで充足されているか（RULE-12: どのOriginalでも通数充足→OK。${isUC_bl?'SWB取引のため通数チェックスキップ':''}）/ BL記載:[実際の通数記載]
 CHECK-A10|判定|GroupA|FCL/CY条件|LC要求:FCL/FCL CY/CY / BL記載:[実際の記載]
-CHECK-A11|判定|GroupA|船積日|LC最終船積日:${lc.latestShipment||'不明'} / BL記載:[実際のON BOARD日付] → [期限内か否か]（RULE-01: 日付形式差異はOK）
+CHECK-A11|判定|GroupA|船積日|LC最終船積日:${aiDate(lc.latestShipment)||'不明'} / BL記載:[実際のON BOARD日付] → [期限内か否か]（RULE-01: 日付形式差異はOK）
 
 【Group B — BL Draft ↔ ACL確認済みデータ 差分チェック】★最重要★ B1〜B8は他のいかなる項目よりも優先。1項目でも不一致があれば即NG
 CHECK-B1|判定|GroupB|【最重要】コンテナ番号|ACL確認済:「${(ex.containers||[]).join(', ')}」 / BL記載:[実際のコンテナ番号] → 番号リストが全一致すればOK（RULE-14: 順序差異はOK）
@@ -4172,7 +4178,7 @@ BeneText: ${r['cr49f_s_i.crcf9_bencert_text']||''}`).join('\n');
 ② 47A追加条件のORDER NOは必ずblText1・allに反映すること。過去SIのORDER NOを流用することは絶対禁止。
 
 === 新しいLC情報 ===
-LC番号: ${lc.lcNo||''} DATED ON ${lc.lcDate||''}
+LC番号: ${lc.lcNo||''} DATED ON ${aiDate(lc.lcDate)}
 Applicant(会社名): ${(lc.applicant||'').slice(0,200)}
 Applicant住所(★必ずaddressに使用): ${(lc.applicantAddress||'未記載').slice(0,300)}
 Consignee(46A): ${(lc.consignee46A||'').slice(0,600)}
@@ -4265,6 +4271,46 @@ function fmtDate(s){
   if(m)return`${MO[+m[2]-1]} ${m[3]}, ${m[1]}`;
   try{const d=new Date(s);if(!isNaN(d))return`${MO[d.getMonth()]} ${String(d.getDate()).padStart(2,'0')}, ${d.getFullYear()}`;}catch(e){}
   return s;
+}
+/* ============================================================
+   v2.36 PR#6: 日付の明確化
+   LC JSON の日付は DD/MM/YYYY で保存される。これをそのままAIプロンプトに渡すと、日・月がともに12以下の日付
+   （例: 10/11/2026 = 11月10日）を AI が MM/DD（10月11日）と誤読して NG 判定になる（2026-10 ACL最終船積日の誤判定）。
+   → AIへ渡す日付は常に「NOV 10, 2026」（英語月表記）に変換する。保存値・画面表示は変更しない。
+============================================================ */
+function aiDate(s){
+  if(!s) return '';
+  const t=String(s).trim();
+  let m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m && +m[1]>=1 && +m[1]<=31 && +m[2]>=1 && +m[2]<=12) return `${MO[+m[2]-1]} ${m[1].padStart(2,'0')}, ${m[3]}`;
+  m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m && +m[2]>=1 && +m[2]<=12) return `${MO[+m[2]-1]} ${m[3]}, ${m[1]}`;
+  return t;   // 既に英語月表記・その他の文字列は変更しない（Date()による推測変換はしない）
+}
+// LC オブジェクトの日付3項目だけ aiDate 化した複製（formatLc を AI プロンプトに使うときの代替入力用）
+function aiLcDates(lc){
+  const c=Object.assign({},lc||{});
+  ['lcDate','expiryDate','latestShipment'].forEach(k=>{ if(c[k]) c[k]=aiDate(c[k]); });
+  return c;
+}
+// 保存用: 「OCT 22, 2026」「22 OCT 2026」「2026-10-22」→ DD/MM/YYYY（日付のみの文字列に限る。それ以外は変更しない）
+const MON_NUM={JAN:1,JANUARY:1,FEB:2,FEBRUARY:2,MAR:3,MARCH:3,APR:4,APRIL:4,MAY:5,JUN:6,JUNE:6,JUL:7,JULY:7,AUG:8,AUGUST:8,SEP:9,SEPT:9,SEPTEMBER:9,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DEC:12,DECEMBER:12};
+function toDdMmYyyy(s){
+  if(!s) return s;
+  const t=String(s).trim(); const p2=n=>String(n).padStart(2,'0');
+  let m=t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m) return `${p2(m[1])}/${p2(m[2])}/${m[3]}`;
+  m=t.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:ST|ND|RD|TH)?\s*,?\s*(\d{4})$/i);
+  if(m && MON_NUM[m[1].toUpperCase()]) return `${p2(m[2])}/${p2(MON_NUM[m[1].toUpperCase()])}/${m[3]}`;
+  m=t.match(/^(\d{1,2})(?:ST|ND|RD|TH)?\s+([A-Za-z]{3,9})\.?\s*,?\s*(\d{4})$/i);
+  if(m && MON_NUM[m[2].toUpperCase()]) return `${p2(m[1])}/${p2(MON_NUM[m[2].toUpperCase()])}/${m[3]}`;
+  m=t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return t;
+}
+function normalizeLcDates(o){
+  if(o) ['lcDate','expiryDate','latestShipment'].forEach(k=>{ if(o[k]) o[k]=toDdMmYyyy(o[k]); });
+  return o;
 }
 function buildLCNo(lc){if(!lc.lcNo)return'';const dated=fmtDate(lc.lcDate);return dated?`${lc.lcNo} DATED ON ${dated}`:lc.lcNo;}
 
@@ -4522,7 +4568,7 @@ function detectCompSpecial(){
 ============================================================ */
 async function runCompAI(){
   if(!compLcData){alert('LCを選択してください');return;}
-  const lc=compLcData;const lcInfo=lc.rawText||formatLc(lc);
+  const lc=compLcData;const lcInfo=lc.rawText||formatLc(aiLcDates(lc));
   document.getElementById('compAiBtn').disabled=true;
   document.getElementById('compAiProg').style.display='block';
   document.getElementById('compAiNote').innerHTML='';
