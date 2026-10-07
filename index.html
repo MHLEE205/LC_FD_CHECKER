@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.36 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.37 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.36</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.37</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.36 (2026-10-07) | 日付の明確化: AIへ渡すLC日付を「NOV 10, 2026」形式に統一（DD/MM↔MM/DDの誤読防止）</span>
+  <span>LEENEAR CORPORATION — v2.37 (2026-10-07) | ACLコード検証: LC番号・コンテナ/Seal/Bale/重量をCOMPASS実データと一字一句照合 + AI判定の重複・矛盾を補正</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -2971,6 +2971,197 @@ function updAclBtn(){
 /* ============================================================
    SECTION: ACL_BL_CHECK — ACL確認実行
 ============================================================ */
+/* ============================================================
+   v2.37 PR#7-1: ACL コード検証
+   ACL(DR)の「LC番号」「コンテナ番号・Seal・Bale・重量(セット)」「船名」「Booking No.」を、AIの判定ではなく
+   コードが COMPASS の実データと一字一句照合する（I/1・O/0 などの取り違え、Sealの余分な文字も検出）。
+   ・AIは「原文の引用」役。判定はコードが行い、AIの判定を上書きする（OK→NG / NG→OK の双方向）
+   ・COMPASS取得失敗・ACL原文の解析不能・コンテナ未入力のときは従来のAI比較にフォールバックし、警告を表示する
+============================================================ */
+function levDist(a,b){
+  a=String(a); b=String(b); const d=[]; for(let j=0;j<=b.length;j++) d[j]=j;
+  for(let i=1;i<=a.length;i++){ let prev=d[0]; d[0]=i; for(let j=1;j<=b.length;j++){ const tmp=d[j]; d[j]=Math.min(d[j]+1,d[j-1]+1,prev+(a[i-1]===b[j-1]?0:1)); prev=tmp; } }
+  return d[b.length];
+}
+const idNorm=x=>String(x==null?'':x).toUpperCase().replace(/\s+/g,'');                       // 空白のみ許容（RULE-13）
+const confNorm=x=>idNorm(x).replace(/[1L]/g,'I').replace(/0/g,'O').replace(/5/g,'S').replace(/8/g,'B');   // 紛らわしい文字を同一視した形
+function describeIdDiff(exp,act){
+  const a=idNorm(exp), b=idNorm(act); if(a===b) return '';
+  let p=0; while(p<a.length&&p<b.length&&a[p]===b[p]) p++;
+  let q=0; while(q<a.length-p&&q<b.length-p&&a[a.length-1-q]===b[b.length-1-q]) q++;
+  const am=a.slice(p,a.length-q), bm=b.slice(p,b.length-q);
+  const ty=c=>/[A-Z]/.test(c)?'英字':/\d/.test(c)?'数字':'記号';
+  let d;
+  if(!am) d=`${p+1}文字目付近に「${bm}」が余分`;
+  else if(!bm) d=`${p+1}文字目の「${am}」が欠落`;
+  else if(am.length===1&&bm.length===1) d=`${p+1}文字目: 基準「${am}」(${ty(am)}) → 実際「${bm}」(${ty(bm)})`;
+  else d=`${p+1}文字目〜: 基準「${am}」→ 実際「${bm}」`;
+  if(a.length===b.length && confNorm(a)===confNorm(b)) d+='（I/1・O/0 など紛らわしい文字の取り違え）';
+  return d;
+}
+function dateKey(x){
+  const m=String(x||'').toUpperCase().match(/([A-Z]{3})[A-Z]*\.?\s*(\d{1,2})\s*,?\s*(\d{4})/);
+  if(!m) return ''; const mi=MO.indexOf(m[1]); if(mi<0) return '';
+  return `${m[3]}-${String(mi+1).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+}
+// ACL(ACL情報 / D/R) の原文テキストから、コンテナ明細・総計・コンテナ数・「L/C NO. … DATED ON …」を取り出す
+function parseAclText(text){
+  const t=String(text||'').replace(/\s+/g,' ');
+  const containers=[]; let m;
+  const re=/KGM\s+([\d,]+)(?:\.\d+)?\s+[^\d]{1,40}?\bBL\s+(\d+)\s+([A-Z0-9]{5,})\s+([A-Z]{4}\d{7})\s+(\d+)/g;
+  while((m=re.exec(t))) containers.push({seq:+m[5],container:m[4],seal:m[3],bales:+m[2],kg:parseInt(m[1].replace(/,/g,''),10)});
+  let totals=null; const tm=t.match(/KGM\s+([\d,]+)(?:\.\d+)?\s+[^\d]{0,40}?\bBL\s+(\d+)\s+Number\s+and\s+Kind/i);
+  if(tm) totals={kg:parseInt(tm[1].replace(/,/g,''),10),bales:+tm[2]};
+  const cm=t.match(/\((\d+)\)\s*CONTAINERS?\s*ONLY/i); const statedCount=cm?+cm[1]:null;
+  const lcMatches=[]; const lre=/L\/?C\s*NO\.?\s*[:：]?\s*([A-Z0-9]+)\s+DATED\s+ON\s+([A-Z]{3,9}\.?\s*\d{1,2}\s*,?\s*\d{4})/gi;
+  while((m=lre.exec(t))) lcMatches.push({no:m[1],date:m[2].replace(/\s+/g,' ').trim()});
+  const reasons=[];
+  if(!containers.length) reasons.push('コンテナ明細を検出できない');
+  if(new Set(containers.map(c=>idNorm(c.container))).size!==containers.length) reasons.push('ACL内でコンテナ番号が重複');
+  if(statedCount!=null && statedCount!==containers.length) reasons.push(`明細${containers.length}件 / 記載${statedCount}件`);
+  if(totals){
+    const sb=containers.reduce((a,c)=>a+c.bales,0), sk=containers.reduce((a,c)=>a+c.kg,0);
+    if(sb!==totals.bales) reasons.push(`Bale合算${sb} ≠ 総計${totals.bales}`);
+    if(sk!==totals.kg) reasons.push(`重量合算${sk} ≠ 総計${totals.kg}`);
+  }
+  if(!totals && statedCount==null) reasons.push('総計・コンテナ数の記載が見つからず整合性を確認できない');
+  return {containers,totals,statedCount,lcMatches,ok:reasons.length===0,reasons,text:t};
+}
+// COMPASS から Invoice番号で booking / コンテナ(セット) / S/I(sino 1) を取得（読み取り専用。D-03 と同じ参照経路）
+async function fetchCompassShipment(invNo){
+  const inv=String(invNo||'').trim();
+  if(!/^[A-Za-z0-9_\-]+$/.test(inv)) return {ok:false,reason:'Invoice番号の形式が不正'};
+  if(!(await ensureDvToken())) return {ok:false,reason:'COMPASS未接続'};
+  try{
+    const bk=await dvGet(`cr49f_bookings?$filter=cr49f_invoice_no eq '${inv}'&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,cr49f_etd,cr49f_eta,cr49f_invoice_no,_cr49f_sale_contract_id_value`);
+    if(!bk.value||!bk.value.length) return {ok:false,reason:`COMPASSに Invoice ${inv} のブッキングがありません`};
+    const booking=bk.value[0];
+    const ct=await dvGet(`crcf9_container_informations?$filter=_crcf9_booking_id_value eq ${booking.cr49f_bookingid}&$select=crcf9_container_informationid,crcf9_container_no,crcf9_seal_no,crcf9_type,crcf9_partial_no,crcf9_quantity,crcf9_n_w,crcf9_g_w,crcf9_t_w`);
+    const all=ct.value||[];
+    const filled=all.filter(r=>String(r.crcf9_container_no||'').trim()!=='');
+    let si1=null; const cid=booking._cr49f_sale_contract_id_value;
+    if(cid){
+      try{
+        const sr=await dvGet(`cr49f_s_is?$filter=_cr49f_sale_contract_id_value eq ${cid}&$select=crcf9_sino,cr49f_lc_no,crcf9_consignee,crcf9_notify_party`);
+        const list=sr.value||[]; si1=list.find(r=>String(r.crcf9_sino)==='1')||list[0]||null;
+      }catch(e){ /* S/I取得失敗でもコンテナ照合は可能 */ }
+    }
+    return {ok:true,booking,all,filled,blankCount:all.length-filled.length,si1};
+  }catch(e){ return {ok:false,reason:'COMPASS取得エラー: '+(e.message||e)}; }
+}
+// ACL原文 ↔ COMPASS を照合して CHECK 行を作る（純粋関数）
+function buildAclCodeChecks(o){
+  const {acl,cp,isLcMode,lcMeta}=o; const lines=[];
+  const push=(id,st,cat,title,detail)=>lines.push({id,st,cat,title,detail:String(detail).replace(/\|/g,'／')});
+  const comp=cp.filled.map(r=>({container:String(r.crcf9_container_no||'').trim(),seal:String(r.crcf9_seal_no||'').trim(),bales:Number(r.crcf9_quantity)||0,
+    kg:Number((r.crcf9_g_w!=null&&r.crcf9_g_w!=='')?r.crcf9_g_w:r.crcf9_n_w)||0}));
+  const cMap=new Map(comp.map(r=>[idNorm(r.container),r])), aMap=new Map(acl.containers.map(r=>[idNorm(r.container),r]));
+  const fmtKg=k=>`${k.toLocaleString('en-US')}kg`;
+  const blankNote=cp.blankCount>0?`（COMPASSに番号未入力の行${cp.blankCount}件は除外）`:'';
+  // ── A1: LC番号・発行日 (LCモードのみ) ──
+  if(isLcMode){
+    const raw=String((cp.si1&&cp.si1.cr49f_lc_no)||'').trim(); const lm=raw.match(/^(\S+)\s+DATED\s+ON\s+(.+)$/i);
+    const expNo=lm?lm[1]:(raw.split(/\s+/)[0]||''); const expDate=lm?lm[2].trim():(lcMeta&&lcMeta.lcDate?aiDate(lcMeta.lcDate):'');
+    if(expNo){
+      const expTxt=`${expNo}${expDate?' DATED ON '+expDate:''}`; const probs=[]; const flagged=new Set();
+      for(const m of acl.lcMatches){
+        if(idNorm(m.no)!==idNorm(expNo)){ probs.push(`ACL「${m.no}」/ COMPASS「${expNo}」→ ${describeIdDiff(expNo,m.no)}`); flagged.add(idNorm(m.no)); }
+        else if(expDate && dateKey(m.date)!==dateKey(expDate)) probs.push(`日付 ACL「${m.date}」/ COMPASS「${expDate}」`);
+      }
+      const tokens=[...new Set((acl.text.toUpperCase().match(/[A-Z0-9]{8,}/g)||[]))];
+      for(const tk of tokens){ if(tk!==idNorm(expNo) && !flagged.has(tk) && Math.abs(tk.length-expNo.length)<=2 && levDist(tk,idNorm(expNo))<=2) probs.push(`ACL内に類似番号「${tk}」（COMPASS「${expNo}」との差異: ${describeIdDiff(expNo,tk)}）`); }
+      if(probs.length) push('A1','NG','GroupA','L/C No.記載',`ACL: ${acl.lcMatches.map(m=>m.no+' DATED ON '+m.date).join(' ; ')||'(該当記載なし)'} / COMPASS: ${expTxt} → 不一致: ${probs.join(' ／ ')}`);
+      else if(!acl.lcMatches.length) push('A1','WARN','GroupA','L/C No.記載',`ACL原文に「L/C NO. … DATED ON …」が見つからない（COMPASS: ${expTxt}）`);
+      else{
+        let st='OK', note='一字一句一致';
+        if(lcMeta&&lcMeta.lcNo&&idNorm(String(lcMeta.lcNo).split(/\s/)[0])!==idNorm(expNo)){ st='WARN'; note+=`。ただし COMPASS「${expNo}」と LC JSON「${lcMeta.lcNo}」が不一致（上流のSI入力を確認）`; }
+        push('A1',st,'GroupA','L/C No.記載',`ACL: ${acl.lcMatches.map(m=>m.no+' DATED ON '+m.date).join(' ; ')} / COMPASS: ${expTxt} → ${note}`);
+      }
+    }
+  }
+  // ── B1: コンテナ番号 ──
+  const missing=[...cMap.keys()].filter(k=>!aMap.has(k)), extra=[...aMap.keys()].filter(k=>!cMap.has(k));
+  const b1=[]; const usedMissing=new Set();
+  for(const e of extra){ const near=missing.find(m=>!usedMissing.has(m)&&levDist(e,m)<=2); if(near){ usedMissing.add(near); b1.push(`ACL「${aMap.get(e).container}」は COMPASS「${cMap.get(near).container}」の誤記の可能性（${describeIdDiff(near,e)}）`); } else b1.push(`ACLにのみ存在: ${aMap.get(e).container}`); }
+  for(const m of missing) if(!usedMissing.has(m)) b1.push(`ACLに存在しない: ${cMap.get(m).container}`);
+  push('B1',b1.length?'NG':'OK','GroupB','【最重要】コンテナ番号',b1.length?`ACL ${acl.containers.length}本 / COMPASS ${comp.length}本 → ${b1.join(' ／ ')}`:`ACL・COMPASSとも${comp.length}本 ${comp.map(r=>r.container).join(', ')} → 全て一字一句一致${blankNote}`);
+  // ── B2/B7/B8: コンテナ番号をキーにした Seal / Bale / 重量 ──
+  const pairs=[...cMap.keys()].filter(k=>aMap.has(k)); const bad={seal:[],bales:[],kg:[]};
+  for(const k of pairs){ const c=cMap.get(k), a=aMap.get(k);
+    if(idNorm(c.seal)!==idNorm(a.seal)) bad.seal.push(`${c.container}: Seal ACL=${a.seal} / COMPASS=${c.seal}（${describeIdDiff(c.seal,a.seal)}）`);
+    if(c.bales!==a.bales) bad.bales.push(`${c.container}: ACL=${a.bales} / COMPASS=${c.bales} bale`);
+    if(c.kg!==a.kg) bad.kg.push(`${c.container}: ACL=${fmtKg(a.kg)} / COMPASS=${fmtKg(c.kg)}`); }
+  const okMsg=(label)=>`${pairs.length}本すべて コンテナ番号をキーに${label}が一致（${pairs.map(k=>cMap.get(k).container).join(', ')}）`;
+  push('B2',bad.seal.length?'NG':'OK','GroupB','【最重要】Seal番号ペア',bad.seal.length?bad.seal.join(' ／ '):okMsg('Seal番号'));
+  push('B7',bad.bales.length?'NG':'OK','GroupB','【最重要】各コンテナBale数ペア',bad.bales.length?bad.bales.join(' ／ '):okMsg('Bale数'));
+  push('B8',bad.kg.length?'NG':'OK','GroupB','【最重要】各コンテナ重量ペア',bad.kg.length?bad.kg.join(' ／ '):okMsg('重量(kg)'));
+  // ── B6 コンテナ数 / B4 総Bale / B5 総重量 ──
+  const cntExp=comp.length, cntAcl=acl.statedCount!=null?acl.statedCount:acl.containers.length;
+  push('B6',cntAcl!==cntExp?'NG':'OK','GroupB','コンテナ数',`ACL ${cntAcl}本 / COMPASS ${cntExp}本${cntAcl!==cntExp?' → 不一致':' → 一致'}${blankNote}`);
+  const sumB=comp.reduce((a,r)=>a+r.bales,0), sumK=comp.reduce((a,r)=>a+r.kg,0);
+  const aclB=acl.totals?acl.totals.bales:acl.containers.reduce((a,c)=>a+c.bales,0), aclK=acl.totals?acl.totals.kg:acl.containers.reduce((a,c)=>a+c.kg,0);
+  push('B4',aclB!==sumB?'NG':'OK','GroupB','総Bale数',`ACL ${aclB} / COMPASS合算 ${sumB}${aclB!==sumB?' → 不一致':' → 一致'}`);
+  push('B5',aclK!==sumK?'NG':'OK','GroupB','総重量(MT)',`ACL ${fmtKg(aclK)}(${(aclK/1000).toFixed(2)}MT) / COMPASS合算 ${fmtKg(sumK)}(${(sumK/1000).toFixed(2)}MT)${aclK!==sumK?' → 不一致':' → 一致'}`);
+  // ── B3 船名 / C3 Booking No. (原文に含まれるかを語単位で確認) ──
+  const textTokens=new Set(acl.text.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
+  const vessel=String(cp.booking.cr49f_main_ship_name||'').trim();
+  if(vessel){
+    const vt=vessel.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean), miss=vt.filter(x=>!textTokens.has(x));
+    push('B3',miss.length?'WARN':'OK','GroupB','船名',miss.length?`COMPASS「${vessel}」のうち ACL原文に見つからない語: ${miss.join(', ')}`:`COMPASS「${vessel}」の全ての語(船名・航海番号)がACL原文に記載あり`);
+  }
+  const bn=String(cp.booking.cr49f_booking_no||'').trim().toUpperCase();
+  if(bn){
+    if(textTokens.has(idNorm(bn))) push('C3','OK','GroupC','Booking No.',`COMPASS「${bn}」がACL原文に記載あり（一致）`);
+    else{ const near=[...textTokens].find(tk=>tk.length>=6&&Math.abs(tk.length-bn.length)<=2&&levDist(tk,idNorm(bn))<=2);
+      if(near) push('C3','NG','GroupC','Booking No.',`ACL「${near}」/ COMPASS「${bn}」→ ${describeIdDiff(bn,near)}`);
+      else push('C3','WARN','GroupC','Booking No.',`COMPASS「${bn}」がACL原文に見つからない`); }
+  }
+  return {lines,aclSets:acl.containers.map(c=>({container:c.container,seal:c.seal,bales:c.bales,kg:c.kg})),compassSets:comp};
+}
+// ACL原文のパース + COMPASS取得 + 照合（失敗時は applicable:false と理由を返す）
+async function prepareAclCodeVerification(o){
+  const base={applicable:false,reason:'',lines:[],aclSets:[],compassSets:[]};
+  try{
+    const acl=parseAclText(o.aclText);
+    if(!acl.ok){ base.reason='ACL原文を解析できません（'+acl.reasons.join(' / ')+'）'; return base; }
+    base.aclSets=acl.containers.map(c=>({container:c.container,seal:c.seal,bales:c.bales,kg:c.kg}));
+    const cp=await fetchCompassShipment(o.invNo);
+    if(!cp.ok){ base.reason=cp.reason; return base; }
+    if(!cp.filled.length){ base.reason=`COMPASSにコンテナ番号が未入力（${cp.blankCount}行）— COMPASS未更新`; return base; }
+    const v=buildAclCodeChecks({acl,cp,isLcMode:o.isLcMode,lcMeta:o.lcMeta});
+    return Object.assign(base,v,{applicable:true,blankCount:cp.blankCount});
+  }catch(e){ base.reason='コード検証エラー: '+(e.message||e); return base; }
+}
+// AIの結果にコード検証の結果を反映する（コードの判定が優先。OVERALLも再計算）
+function applyAclCodeChecks(raw,codeV){
+  if(!codeV) return raw;
+  const fmt=l=>`CHECK-${l.id}|${l.st}|${l.cat}|${l.title}|🔎コード検証 ${l.detail}`;
+  const lines=String(raw).split('\n'); const out=[]; const placed=new Set(); const byId={};
+  let extra=[];
+  if(codeV.applicable){ codeV.lines.forEach(l=>{ byId[l.id]=l; }); }
+  else extra=[`CHECK-V0|WARN|GroupB|コード検証|⚠️ コード検証不可: ${String(codeV.reason||'').replace(/\|/g,'／')} — 以下はAIによる比較結果です。LC番号・コンテナ・Seal・Bale・重量は必ず手動で確認してください`];
+  for(const l of lines){
+    const m=l.trim().replace(/^[-*]\s*/,'').match(/^CHECK-([A-Z]?\d+)\s*\|/i);
+    if(m){ const id=m[1].toUpperCase();
+      if(byId[id]){ if(!placed.has(id)){ out.push(fmt(byId[id])); placed.add(id); } continue; } }
+    out.push(l);
+  }
+  const rest=Object.keys(byId).filter(id=>!placed.has(id)).map(id=>fmt(byId[id])).concat(extra);
+  let ei=out.findIndex(l=>/^\s*EXTRACTED:/.test(l)); if(ei<0) ei=out.findIndex(l=>/^\s*SUMMARY:/.test(l)); if(ei<0) ei=out.length;
+  out.splice(ei,0,...rest);
+  let txt=out.join('\n');
+  if(codeV.applicable){
+    const bad=codeV.lines.filter(l=>l.st!=='OK').map(l=>`${l.id}[${l.title}] ${l.detail}`);
+    if(bad.length && /SUMMARY:/.test(txt)) txt=txt.replace(/SUMMARY:\s*/,`SUMMARY:\n【コード検証の結果】\n${bad.join('\n')}\n\n【AIの所見】\n`);
+  }
+  // OVERALL: 全CHECK行の最も深刻な判定から再計算（AIのOVERALLは使わない）
+  const items=parseCheckLines(txt);
+  if(items.length){
+    const ov=items.some(i=>i.st==='NG')?'NG':items.some(i=>i.st==='WARN')?'WARN':'OK';
+    txt=txt.replace(/^\s*OVERALL:.*$/gm,'').replace(/\n{3,}/g,'\n\n').trimEnd()+`\nOVERALL: ${ov}`;
+  }
+  return txt;
+}
 async function runAclCheck(){
   const invNo=document.getElementById('aclInvNo').value.trim();
   if(!invNo){alert('Invoice No.を入力してください');return;}
@@ -3007,12 +3198,17 @@ async function runAclCheck(){
       aclContent.push(await fileToContent(f));
     }
 
+    // v2.37: コード検証の準備 — ACL原文の解析 + COMPASS実データの取得（失敗時は従来のAI比較にフォールバック）
+    document.getElementById('aclMsg').textContent='ACL原文の解析・COMPASSデータ取得中...';
+    const aclText=aclContent.filter(c=>c&&c.type==='text').map(c=>c.text).join('\n');
+    const codeV=await prepareAclCodeVerification({invNo,aclText,isLcMode,lcMeta});
+
     setStep(['as1','as2','as3','as4'],2);
     document.getElementById('aclMsg').textContent=isLcMode?'LC条件と照合中...':'SI基準データと照合中...';
 
     // ── 프롬프트 빌드 (LC / TT 분기) ──
     const groupA_LC=`【Group A — ACL ↔ LC 比較】ACLが間違っていればNG（ACLを修正）
-CHECK-A1|判定|GroupA|L/C No.記載|LC要求:「${lcMeta?.lcNo||''} DATED ON ${aiDate(lcMeta?.lcDate)}」 / ACL記載:[実際の記載内容または記載なし]
+CHECK-A1|判定|GroupA|L/C No.記載|${codeV.applicable?'ACL記載:[ACL原文の「L/C NO. … DATED ON …」を一字一句そのまま引用。補正・推測は禁止（照合はコードが別途行う）]':`LC要求:「${lcMeta?.lcNo||''} DATED ON ${aiDate(lcMeta?.lcDate)}」 / ACL記載:[実際の記載内容または記載なし]`}
 CHECK-A2|判定|GroupA|Consignee|LC要求:「${(lcMeta?.consignee46A||'').slice(0,60)}...」 / ACL記載:[実際の記載内容]
 CHECK-A3|判定|GroupA|Notify Party|LC要求:TAX ID/住所/TEL/FAX含む形式 / ACL記載:[実際の記載内容、不足項目があれば明記]
 CHECK-A4|判定|GroupA|Port of Discharge|LC要求:「${lcMeta?.pod||''}」 / ACL記載:[実際の記載内容]
@@ -3099,10 +3295,12 @@ OVERALL: OK または NG または WARN`;
     const raw=await callApi([{role:'user',content:[...ivplContent,...aclContent,{type:'text',text:prompt}]}],5000);
     setStep(['as1','as2','as3','as4'],4);
     document.getElementById('aclMsg').textContent='NG項目を再検証中...';
-    const reviewedAcl=await reviewNgItems(raw,[...ivplContent,...aclContent]);
+    const reviewedAcl0=await reviewNgItems(raw,[...ivplContent,...aclContent]);
+    const reviewedAcl=applyAclCodeChecks(reviewedAcl0,codeV);   // v2.37: コード検証の結果で上書き（重複・矛盾も補正）
 
     const displayMeta=isLcMode?lcMeta:{contractNo:ttSnap.contractNo,country:ttSnap.country};
     const res=renderAclResult(reviewedAcl,invNo,displayMeta);
+    if(res.extracted){ res.extracted.sets=codeV.aclSets||[]; res.extracted.compassSets=codeV.compassSets||[]; }
     aclCheckResult={
       invoiceNo:invNo,
       contractNo:displayMeta.contractNo,
@@ -3112,7 +3310,8 @@ OVERALL: OK または NG または WARN`;
       checkedAt:new Date().toISOString().slice(0,10),
       stage:'ACL',
       overall:res.overall,
-      rawResult:raw,
+      rawResult:reviewedAcl,
+      codeVerification:{applicable:!!codeV.applicable,reason:codeV.reason||'',blankCount:codeV.blankCount||0},
       extractedData:res.extracted,
       lcSnapshot:isLcMode?{
         expiryDate:lcMeta.expiryDate,latestShipment:lcMeta.latestShipment,
@@ -3591,9 +3790,22 @@ function resetBlCheck(){
 /* ============================================================
    SECTION: RESULT_RENDER
 ============================================================ */
+/* v2.37: AI判定の後処理（重複CHECK・判定と説明の矛盾）
+   ・同じCHECK番号が複数あるとき、最初の行ではなく「最も深刻な判定(NG>WARN>OK)」を採用（旧: 最初の行のみ採用 → 後続のWARNが捨てられOKに見えた）
+   ・判定がOKでも説明に「不一致・相違・誤記・混同・WARN扱い…」があれば自動でWARNへ（旧: NG→OKへの強制変換のみ）
+   ・NG→OKの強制変換は、説明に不一致等の記載が無い場合に限定 */
+const DISC_NEG_RE=/(不一致|相違|差異|違い|誤記|誤り|間違い?|エラー|ミス|欠落|脱落|余分|超過|異なる?)\s*(は|も|が)?\s*(なし|無し|ない|なかった|ありません|見当たらず|見当たらない|確認されず|検出されず|検出されない)/g;
+const DISC_RE=/(WARN扱い|WARNとして|不一致|相違|異なる|異なり|異なっ|誤記|スペルミス|混同|余分|脱落|欠落|間違|超過)/;
+const UNCERTAIN_RE=/要確認|確認(すること|要|が必要|してください|を)|WARN|NG|修正|訂正|疑い|可能性|⚠|注意/;
+// 不一致・誤記などの語があるか（否定表現「不一致なし」等は除く）
+function hasDiscrepancyWord(detail){ return DISC_RE.test(String(detail||'').replace(DISC_NEG_RE,'')); }
+// OKの説明に「不一致の語」と「確認・疑いの語」が同時にある = 判定と説明が矛盾（許容規則の説明文「相違はRULE-01によりOK」等は対象外）
+function hasDiscrepancyText(detail){ return hasDiscrepancyWord(detail) && UNCERTAIN_RE.test(String(detail||'')); }
+const FORCE_OK_RE=/判定をOKに修正|実質.*一致.*OK|全.*一致.*OK|全コンテナ.*一致.*OK|問題なし.*OK|全て一致.*OK|OKに訂正|全一致.*OK/i;
 function parseCheckLines(raw){
   const items=[];
-  const seen=new Set();
+  const idx=new Map();
+  const SEV={OK:0,WARN:1,NG:2};
   // マークダウン前処理: AI がマークダウン形式で返した場合も吸収する
   const cleaned=raw
     .replace(/\*\*([^*]+)\*\*/g,'$1')   // **bold** → bold
@@ -3601,63 +3813,58 @@ function parseCheckLines(raw){
     .replace(/^#{1,6}\s+/gm,'')          // ## ヘッダー削除
     .replace(/^[-*]\s+(CHECK-)/gm,'$1'); // - CHECK- / * CHECK- → CHECK-
   function inferCat(no){const u=no.toUpperCase();return u.startsWith('A')?'GroupA':u.startsWith('B')?'GroupB':u.startsWith('C')?'GroupC':'その他';}
+  function add(key,item){
+    if(item.st==='OK' && !/^🔎コード検証/.test(item.detail) && hasDiscrepancyText(item.detail)){
+      item.st='WARN'; item.detail='⚠判定と説明が不一致（説明に不一致・誤記等の記載があるため自動でWARNに変更）: '+item.detail;
+    }
+    if(idx.has(key)){
+      const i=idx.get(key);
+      if(SEV[item.st]>SEV[items[i].st]) items[i]=item;   // 重複は最も深刻な判定を採用
+      return;
+    }
+    idx.set(key,items.length); items.push(item);
+  }
   for(const line of cleaned.split('\n')){
     const t=line.trim().replace(/^\*+/,'').replace(/\*+$/,'').replace(/^\s*-\s*/,'').trim();
     // 정규 포맷: CHECK-A1|OK|GroupA|항목명|내용
     const m=t.match(/^CHECK-([A-Z]?\d+)\s*\|\s*(OK|NG|WARN)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*(.*)/i);
     if(m){
       const key=m[1].toUpperCase();
-      if(!seen.has(key)){
-        seen.add(key);
-        let st=m[2].toUpperCase();
-        const detail=m[5].trim();
-        // 後処理: 判定NGだが内容でOKと判断している場合は強制OK
-        if(st==='NG'&&/判定をOKに修正|実質.*一致.*OK|全.*一致.*OK|全コンテナ.*一致.*OK|問題なし.*OK|全て一致.*OK|OKに訂正|全一致.*OK/i.test(detail)){
-          st='OK';
-        }
-        items.push({no:m[1],st,cat:m[3].trim(),title:m[4].trim(),detail});
+      let st=m[2].toUpperCase();
+      const detail=m[5].trim();
+      // 後処理: 判定NGだが内容でOKと判断している場合は強制OK（説明に不一致等の記載が無い場合に限る）
+      if(st==='NG'&&FORCE_OK_RE.test(detail)&&!hasDiscrepancyWord(detail)){
+        st='OK';
       }
+      add(key,{no:m[1],st,cat:m[3].trim(),title:m[4].trim(),detail});
       continue;
     }
     // 폴백1: SUMMARY 안의 CHECK-A1 (NG): 형식
     const m2=t.match(/CHECK-([A-Z]?\d+)\s*\((OK|NG|WARN)\):\s*(.*)/i);
     if(m2){
       const key=m2[1].toUpperCase();
-      if(!seen.has(key)){
-        seen.add(key);
-        const cat=inferCat(m2[1]);
-        items.push({no:m2[1],st:m2[2].toUpperCase(),cat,title:m2[3].split(':')[0].trim()||m2[1],detail:m2[3].trim()});
-      }
+      add(key,{no:m2[1],st:m2[2].toUpperCase(),cat:inferCat(m2[1]),title:m2[3].split(':')[0].trim()||m2[1],detail:m2[3].trim()});
       continue;
     }
     // 폴백2: CHECK-A1: OK — title — detail  / CHECK-A1 → OK : title
     const m4=t.match(/CHECK-([A-Z]?\d+)\s*[:\→→]\s*(OK|NG|WARN)\s*[:\-—]\s*(.*)/i);
     if(m4){
       const key=m4[1].toUpperCase();
-      if(!seen.has(key)){
-        seen.add(key);
-        const cat=inferCat(m4[1]);
-        const rest=m4[3].split(/[:\-—]/);
-        items.push({no:m4[1],st:m4[2].toUpperCase(),cat,title:(rest[0]||m4[1]).trim(),detail:(rest.slice(1).join(' ')||'').trim()});
-      }
+      const rest=m4[3].split(/[:\-—]/);
+      add(key,{no:m4[1],st:m4[2].toUpperCase(),cat:inferCat(m4[1]),title:(rest[0]||m4[1]).trim(),detail:(rest.slice(1).join(' ')||'').trim()});
       continue;
     }
     // 폴백3: CHECK-A1 OK title (공백만으로 구분)
     const m5=t.match(/^CHECK-([A-Z]?\d+)\s+(OK|NG|WARN)\s+(.*)/i);
     if(m5){
       const key=m5[1].toUpperCase();
-      if(!seen.has(key)){
-        seen.add(key);
-        const cat=inferCat(m5[1]);
-        items.push({no:m5[1],st:m5[2].toUpperCase(),cat,title:m5[3].split(':')[0].trim()||m5[1],detail:m5[3].trim()});
-      }
+      add(key,{no:m5[1],st:m5[2].toUpperCase(),cat:inferCat(m5[1]),title:m5[3].split(':')[0].trim()||m5[1],detail:m5[3].trim()});
       continue;
     }
     // 기존 폴백: [OK/NG/WARN] 카테고리 > 항목 | 내용
     const m3=t.match(/^\[(OK|NG|WARN)\]\s*(.+?)\s*>\s*(.+?)\s*\|\s*(.*)/i);
     if(m3){
-      const key=`legacy_${items.length}`;
-      if(!seen.has(key)){seen.add(key);items.push({no:String(items.length+1),st:m3[1].toUpperCase(),cat:m3[2].trim(),title:m3[3].trim(),detail:m3[4].trim()});}
+      add(`legacy_${items.length}`,{no:String(items.length+1),st:m3[1].toUpperCase(),cat:m3[2].trim(),title:m3[3].trim(),detail:m3[4].trim()});
     }
   }
   return items;
