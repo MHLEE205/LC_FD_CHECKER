@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.38 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.39 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.38</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.39</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.38 (2026-10-07) | ACLコード検証②: B/L Instructions形式(座標読取)対応 / Consignee・Notify・Shipper・MarksをCOMPASS S/Iと照合 / AI引用の原文対照</span>
+  <span>LEENEAR CORPORATION — v2.39 (2026-10-07) | ACLコード検証③: NACCS実物PDF対応（Seal番号のハイフン等）/ NACCSをB/L Instructions形式と誤認しない / 「**」折返し継続の許容</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -3013,6 +3013,7 @@ function parseBlInstructionPages(pages){
   const all=[]; pages.forEach(pg=>pg.items.forEach(it=>all.push(it)));
   const joined=pages.map(pg=>pageLines(pg.items).join(' ')).join(' ').replace(/\s+/g,' ');
   const anchorsAll=all.filter(i=>ISO.test(i.s.trim()));
+  if(/[ＡA][ＣC][ＬL]\s*情報/.test(joined)) return null;   // v2.39: NACCS ACL の見出しにも「B/L Instructions」が印刷されている → テキスト解析側で扱う
   if(!/B\/L\s+INSTRUCTIONS/i.test(joined)||!anchorsAll.length) return null;
   const kg=x=>Math.round(parseFloat(String(x).replace(/,/g,''))); const reasons=[]; const containers=[]; let seq=0;
   for(const pg of pages){
@@ -3078,13 +3079,32 @@ function approxFind(idx,needle,maxDist){
   return {dist:best,start:j,end:bj};
 }
 // COMPASS S/I の文言が ACL 原文にあるか。一致→OK / 近い(≤4字)→NG(誤記) / 構造的な差→WARN
+// 近似一致の窓が「語の途中」から始まる/終わる場合の余分な文字を説明（例: ADD が NADD の一部として一致 → 前に余分な「N」）
+function boundaryNote(hi,ap){
+  const o=hi.orig.toUpperCase(), parts=[]; const s0=hi.map[ap.start], e0=hi.map[ap.end-1];
+  if(!hi.startOK[ap.start]){ let i=s0; while(i>0&&/[A-Z0-9]/.test(o[i-1])) i--; parts.push(`前に余分な「${o.slice(i,s0)}」`); }
+  if(!hi.endOK[ap.end-1]){ let j=e0+1; while(j<o.length&&/[A-Z0-9]/.test(o[j])) j++; parts.push(`後ろに余分な「${o.slice(e0+1,j)}」`); }
+  return parts.join('・');
+}
+function mkDiff(hi,ap,expNorm){ const bn=boundaryNote(hi,ap), d=describeIdDiff(expNorm,hi.norm.slice(ap.start,ap.end)); return [d,bn?('語の境界: '+bn):''].filter(Boolean).join(' ／ ')||'差異あり'; }
 function compareTextField(expectedRaw,hayText){
   const exp=alnumIndex(expectedRaw).norm; if(exp.length<4) return null;
   const hi=alnumIndex(hayText); if(findBounded(hi,exp)>=0) return {st:'OK'};
+  // 折返し継続: 末尾の語が原文の別の場所に語単位で存在する場合は、先頭側だけを厳密に照合する（先頭側の誤記は NG のまま）
+  const words=String(expectedRaw||'').toUpperCase().match(/[A-Z0-9]+/g)||[]; const toks=new Set(String(hayText||'').toUpperCase().match(/[A-Z0-9]+/g)||[]);
+  for(let k=words.length-1;k>=1;k--){
+    const head=words.slice(0,k).join(''), tail=words.slice(k);
+    if(head.length<exp.length*0.6) break;
+    if(!tail.every(w=>toks.has(w))) continue;
+    if(findBounded(hi,head)>=0) return {st:'OK',note:'折返し継続: '+tail.join(' ')};
+    const ap=approxFind(hi,head,4);
+    if(ap){ const orig=hi.orig.slice(hi.map[ap.start],hi.map[ap.end-1]+1); return {st:'NG',dist:ap.dist,orig,diff:mkDiff(hi,ap,head)}; }
+    break;
+  }
   const ap=approxFind(hi,exp,Math.max(6,Math.round(exp.length*0.25)));
   if(!ap) return {st:'WARN',why:'notfound'};
-  const win=hi.norm.slice(ap.start,ap.end), orig=hi.orig.slice(hi.map[ap.start],hi.map[ap.end-1]+1);
-  return {st:ap.dist<=4?'NG':'WARN',dist:ap.dist,orig,diff:describeIdDiff(exp,win)};
+  const orig=hi.orig.slice(hi.map[ap.start],hi.map[ap.end-1]+1);
+  return {st:ap.dist<=4?'NG':'WARN',dist:ap.dist,orig,diff:mkDiff(hi,ap,exp)};
 }
 // AI の「ACL記載: …」引用に含まれる語（6字以上の英単語・英数ID）を取り出す
 function aiQuoteTokens(detail){
@@ -3136,7 +3156,7 @@ function dateKey(x){
 function parseAclText(text){
   const t=String(text||'').replace(/\s+/g,' ');
   const containers=[]; let m;
-  const re=/KGM\s+([\d,]+)(?:\.\d+)?\s+[^\d]{1,40}?\bBL\s+(\d+)\s+([A-Z0-9]{5,})\s+([A-Z]{4}\d{7})\s+(\d+)/g;
+  const re=/KGM\s+([\d,]+)(?:\.\d+)?\s+[^\d]{1,40}?\bBL\s+(\d+)\s+([A-Z0-9][A-Z0-9\-\/]{3,})\s+([A-Z]{4}\d{7})\s+(\d+)/g;
   while((m=re.exec(t))) containers.push({seq:+m[5],container:m[4],seal:m[3],bales:+m[2],kg:parseInt(m[1].replace(/,/g,''),10)});
   let totals=null; const tm=t.match(/KGM\s+([\d,]+)(?:\.\d+)?\s+[^\d]{0,40}?\bBL\s+(\d+)\s+Number\s+and\s+Kind/i);
   if(tm) totals={kg:parseInt(tm[1].replace(/,/g,''),10),bales:+tm[2]};
