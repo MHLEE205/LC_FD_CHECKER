@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.39 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.40 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.39</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.40</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.39 (2026-10-07) | ACLコード検証③: NACCS実物PDF対応（Seal番号のハイフン等）/ NACCSをB/L Instructions形式と誤認しない / 「**」折返し継続の許容</span>
+  <span>LEENEAR CORPORATION — v2.40 (2026-10-07) | ACL判定の精度改善: AI引用の原文対照を絞り込み / A12(Original B/L通数・種別)をコード判定 / A3をLC文言基準に / C1の船積日根拠</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -3058,6 +3058,16 @@ function parseBlInstructionPages(pages){
   while((m=lre.exec(joined))) lcMatches.push({no:m[1],date:m[2].replace(/\s+/g,' ').trim()});
   return {format:'BL_INSTRUCTION',containers,totals:(totalBales!=null||totalKg!=null)?{bales:totalBales!=null?totalBales:sumB,kg:totalKg!=null?totalKg:sumK}:null,statedCount,lcMatches,fields,text:joined,ok:reasons.length===0&&containers.length>0,reasons:containers.length?reasons:['コンテナ行を検出できない']};
 }
+// NACCS ACL: 「Number of Original B(S)/L」の値（PDF.js の順序では値が先: 「Notify Party 3 Number of Original B(S)/L」）
+function extractOriginalBLCount(text){ const m=String(text||'').replace(/\s+/g,' ').match(/Notify\s+Party\s+(\d+)\s+Number\s+of\s+Original/i); return m?+m[1]:null; }
+// NACCS ACL: 「Way Bill」「Received B/L」「Freight As Arranged」の各欄に値(1 等)が入っているか（ラベルの真下の値を座標で読む）。ラベルが見つからなければ null
+function parseNaccsFlags(pages){
+  const items=[]; (pages||[]).forEach(pg=>pg.items.forEach(it=>items.push(it)));
+  const find=t=>items.find(i=>i.s.trim()===t); const L={wayBill:find('Way Bill'),received:find('Received B/L'),freight:find('Freight As Arranged')};
+  if(!L.wayBill||!L.received||!L.freight) return null;
+  const val=l=>items.some(j=>j!==l&&l.y-j.y>3&&l.y-j.y<28&&Math.abs((j.x+j.s.length*2)-(l.x+l.s.trim().length*2))<45&&/^\s*(\d{1,2}|[YyXx○●✓])\s*$/.test(j.s));
+  return {wayBill:val(L.wayBill),received:val(L.received),freight:val(L.freight)};
+}
 // 英数字だけの正規化文字列と、元テキスト上の位置・語境界の対応表
 function alnumIndex(text){
   const orig=String(text||''), up=orig.toUpperCase(); const norm=[],map=[],startOK=[],endOK=[]; const re=/[A-Z0-9]+/g; let m;
@@ -3106,15 +3116,18 @@ function compareTextField(expectedRaw,hayText){
   const orig=hi.orig.slice(hi.map[ap.start],hi.map[ap.end-1]+1);
   return {st:ap.dist<=4?'NG':'WARN',dist:ap.dist,orig,diff:mkDiff(hi,ap,exp)};
 }
-// AI の「ACL記載: …」引用に含まれる語（6字以上の英単語・英数ID）を取り出す
+// AI の「ACL記載: …」引用に含まれる語（6字以上の英単語・英数ID）を取り出す。引用は「→」「—」「/」「（」「。」や日本語の文（AIの解説）の手前までに限る
 function aiQuoteTokens(detail){
-  const m=String(detail||'').match(/ACL記載[:：]\s*(.*?)(?=\s[—―–]\s|（|\(|\s\/\s|。|$)/); if(!m) return [];
-  return (m[1].toUpperCase().match(/[A-Z0-9]+/g)||[]).filter(t=>/^[A-Z]{6,}$/.test(t)||(/[A-Z]/.test(t)&&/\d/.test(t)&&t.length>=7)||/^\d{8,}$/.test(t));
+  const m=String(detail||'').match(/ACL記載[:：]\s*(.*)$/); if(!m) return [];
+  let q=m[1].split(/→|\s[—―–]\s|\s\/\s|（|\(|。/)[0].split(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/)[0];
+  return (q.toUpperCase().match(/[A-Z0-9]+/g)||[]).filter(t=>/^[A-Z]{6,}$/.test(t)||(/[A-Z]/.test(t)&&/\d/.test(t)&&t.length>=7)||/^\d{8,}$/.test(t));
 }
+const GROUND_IDS=['A2','A3','A4','A5','A6','A7','A8','A10','C2','C3'];   // 値を原文どおり引用する項目のみ対象（A11/A12 など説明文の項目は対象外）
 // AI が引用した語が ACL 原文に無ければ WARN（AIが原文を補正した疑い）
 function groundAiLine(line,tokenSet){
   if(!tokenSet||!tokenSet.size) return line;
   const m=line.trim().replace(/^[-*]\s*/,'').match(/^(CHECK-[A-Z]?\d+)\s*\|\s*(OK|NG|WARN)\s*\|\s*([^|]*)\|\s*([^|]*)\|\s*(.*)$/i); if(!m) return line;
+  if(!GROUND_IDS.includes(m[1].replace(/^CHECK-/i,'').toUpperCase())) return line;
   const miss=[...new Set(aiQuoteTokens(m[5]).filter(t=>!tokenSet.has(t)))]; if(!miss.length) return line;
   const st=m[2].toUpperCase()==='NG'?'NG':'WARN';
   return `${m[1]}|${st}|${m[3].trim()}|${m[4].trim()}|⚠AIの引用がACL原文に存在しない語: ${miss.join(', ')}（AIが原文を補正して引用した可能性。原文の綴りを確認）: ${m[5]}`;
@@ -3290,6 +3303,18 @@ function buildAclCodeChecks(o){
     else if(alias) lines.push({id:'C5',st:'OK',cat:'GroupC',title:'Marks',detail:`ACL「${cl(aclMark)}」/ COMPASS「${expMark}」（N/M と NO MARK は同義）`,merge:true});
     else lines.push({id:'C5',st:strict?'NG':'WARN',cat:'GroupC',title:'Marks',detail:`ACL「${cl(aclMark)}」/ COMPASS「${expMark}」→ ${describeIdDiff(expMark.replace(/[^A-Za-z0-9]/g,''),aclMark.replace(/[^A-Za-z0-9]/g,''))}${strict?'（LC 47A: Marks は B/L と同一でなければならない）':''}`,merge:true});
   }
+  // ── v2.40: A12 Original B/L 通数・種別をコードで判定（AIは様式の印刷ラベル「Way Bill / Received B/L」を選択値と誤読するため）──
+  if(isLcMode&&acl.originalBL!=null){
+    const fg=acl.flags, req=(()=>{ const t=[].concat((lcMeta&&lcMeta.docs46A)||[]).join(' ')+' '+((lcMeta&&lcMeta.consignee46A)||''); return /\b([23])\s*\/\s*3\b/.test(t)||/FULL\s*\(?\s*3\s*\/\s*3/i.test(t)?3:(/FULL\s+SET/i.test(t)?1:null); })();
+    const flagTxt=fg?`Way Bill: ${fg.wayBill?'選択':'未選択'} / Received B/L: ${fg.received?'選択':'未選択'} / Freight As Arranged: ${fg.freight?'選択':'未選択'}`:'Way Bill・Received B/L の選択欄は座標を読めないため対象外';
+    const bad=[]; if(fg&&fg.wayBill) bad.push('Way Bill が選択されている（原本B/Lは発行されない）'); if(fg&&fg.received) bad.push('Received B/L が選択されている（SHIPPED ON BOARD 表示のB/Lではない）');
+    if(acl.originalBL<1) bad.push('原本B/Lの通数が0'); else if(req&&acl.originalBL<req) bad.push(`原本${acl.originalBL}通のみ（LC要求は${req}通発行を前提とするSET）`);
+    lines.push({id:'A12',st:bad.length?'WARN':'OK',cat:'GroupA',title:'Original B/L通数',detail:`ACL: Number of Original B(S)/L = ${acl.originalBL}通 / ${flagTxt} → ${bad.length?bad.join(' ／ '):`Ocean B/L（原本${acl.originalBL}通）。LC要求${req?(req===3?'（FULL (3/3) / 2/3 SET）':''):''}と整合`}`.replace(/\|/g,'／')});
+  }
+  // ── A13: LC に現地 SHIPPING AGENT 要件がある場合（B/L に代理店の NAME/ADDRESS/TEL/FAX。ACL には入力欄がない → B/L Draft で確認）──
+  if(isLcMode&&lcMeta&&(lcMeta.localAgentRequired===true||/SHIPPING\s+AGENT/i.test([lcMeta.notifyParty46A].concat(lcMeta.docs46A||[]).join(' ')))){
+    lines.push({id:'A13',st:'WARN',cat:'GroupA',title:'現地SHIPPING AGENT(B/L)',detail:`LC要件: B/Lに現地SHIPPING AGENTのNAME・ADDRESS・TEL・FAX（${lcMeta.faxNoRequired?'FAX必須。':''}国外の代理店は不受理）。これはNotify欄の要件ではなく、ACLに入力欄もないため ACLでは判定不能 → B/L Draft（船社が印字する Delivery Agent 欄）で確認`.replace(/\|/g,'／')});
+  }
   // 45FT 禁止 LC と ISO規格コード（45GP/45R = 40ft HC。45ft ではないが、PL/IV の「45R」を銀行が45FTと誤読するリスク）
   const c47=(lcMeta&&lcMeta.addCond47A)||'';
   if(isLcMode&&/45\s*(FT|'|FEET|FOOT)/i.test(c47)&&/UNACCEPT|NOT\s+ACCEPT|PROHIBIT|NOT\s+ALLOWED|NOT\s+PERMIT/i.test(c47)){
@@ -3312,6 +3337,8 @@ async function prepareAclCodeVerification(o){
       if(st){ base.aclTokens=new Set(st.text.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean)); if(st.ok) acl=st; else acl={ok:false,reasons:['B/L Instructions形式を検出したが整合性検証に失敗: '+st.reasons.join(' / ')]}; }
     }
     if(!acl.ok){ base.reason='ACL原文を解析できません（'+acl.reasons.join(' / ')+'）'; return base; }
+    if(acl.format==='BL_INSTRUCTION') acl.originalBL=(acl.fields&&acl.fields.originalBL!=null)?acl.fields.originalBL:null;
+    else{ acl.originalBL=extractOriginalBLCount(o.aclText); acl.flags=parseNaccsFlags(o.aclPages); }
     base.aclSets=acl.containers.map(c=>({container:c.container,seal:c.seal,bales:c.bales,kg:c.kg}));
     const cp=await fetchCompassShipment(o.invNo);
     if(!cp.ok){ base.reason=cp.reason; return base; }
@@ -3401,7 +3428,7 @@ async function runAclCheck(){
     const groupA_LC=`【Group A — ACL ↔ LC 比較】ACLが間違っていればNG（ACLを修正）
 CHECK-A1|判定|GroupA|L/C No.記載|${codeV.applicable?'ACL記載:[ACL原文の「L/C NO. … DATED ON …」を一字一句そのまま引用。補正・推測は禁止（照合はコードが別途行う）]':`LC要求:「${lcMeta?.lcNo||''} DATED ON ${aiDate(lcMeta?.lcDate)}」 / ACL記載:[実際の記載内容または記載なし]`}
 CHECK-A2|判定|GroupA|Consignee|LC要求:「${(lcMeta?.consignee46A||'').slice(0,60)}...」 / ACL記載:[実際の記載内容]
-CHECK-A3|判定|GroupA|Notify Party|LC要求:TAX ID/住所/TEL/FAX含む形式 / ACL記載:[実際の記載内容、不足項目があれば明記]
+CHECK-A3|判定|GroupA|Notify Party|LC要求:「${(String(lcMeta?.notifyParty46A||'').split(/\.?\s*B\/L\s+MUST\s+SHOW|\bSHIPPING\s+AGENT/i)[0].trim())||'(LC JSONにNotify要件の記載なし)'}」（LCに書かれていない項目[TEL/FAX/TAX IDなど]は要求しない。「SHIPPING AGENT」の要件はB/L上の現地代理店情報でありNotify欄とは別なのでこのCHECKでは扱わない） / ACL記載:[実際の記載内容、LC要求に対する不足項目があれば明記]
 CHECK-A4|判定|GroupA|Port of Discharge|LC要求:「${lcMeta?.pod||''}」 / ACL記載:[実際の記載内容]
 CHECK-A5|判定|GroupA|Place of Delivery|LC要求:「${lcMeta?.pod||''}」 / ACL記載:[実際の記載内容]
 CHECK-A6|判定|GroupA|Port of Loading|LC要求:「${lcMeta?.pol||''}」 / ACL記載:[実際の記載内容]
@@ -3427,8 +3454,8 @@ CHECK-A10|判定|GroupA|Freight条件|FREIGHT PREPAID AS ARRANGED / ACL記載:[�
 CHECK-A11|判定|GroupA|Partial/Transhipment|ACL記載:[実際の積み方・経由有無] → 問題なければOK
 CHECK-A12|判定|GroupA|Original B/L通数|※「WAYBILL」「RECEIVED B/L」は様式に印刷された選択肢ラベル。X印などで選択が明示されている場合のみ種別とみなし、選択が読み取れないときは「種別判別不能」と書いて推測でWAYBILLと判断しない。ACLが「Way Bill」の場合はOK（通数概念なし）。Ocean B/Lの場合のみ通常3通と照合（NUMBER OF ORIGINAL B(S)/Lの記載通数）:[実際の記載通数または記載なし]`;
 
-    const groupC_LC=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] / LC最終船積日:${aiDate(lcMeta?.latestShipment)||'不明'} → [判定理由]`;
-    const groupC_TT=`CHECK-C1|判定|GroupC|船積日|ACL記載:[実際の船積日] → 記載があればOK（TT/DPのため期限なし）`;
+    const groupC_LC=`CHECK-C1|判定|GroupC|船積日|ACL記載:[ACLに船積日の記載があればその日付。ACL上の「Registration Date/登録日時」は船積日ではない。記載がなければ「ACLに船積日の記載なし」と書き、IV/PLの「On or about」を船積予定日として使う] / LC最終船積日:${aiDate(lcMeta?.latestShipment)||'不明'} → [判定理由]`;
+    const groupC_TT=`CHECK-C1|判定|GroupC|船積日|ACL記載:[ACLに船積日の記載があればその日付。ACL上の「Registration Date/登録日時」は船積日ではない] → 記載があればOK（TT/DPのため期限なし）`;
 
     const baseInfo=isLcMode?`=== LC条件 ===\n${lcInfo}`:`=== SI基準データ（COMPASS） ===
 契約番号: ${ttSnap?.contractNo||''}
