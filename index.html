@@ -9,7 +9,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.34 — LEENEAR</title>
+<title>LEENAI 統合ツール v2.35 — LEENEAR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* ============================================================
@@ -262,7 +262,7 @@ select.fi{cursor:pointer;height:34px;}
   <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
   <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
   <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.34</div>
+  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.35</div>
   <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
   <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
   <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
@@ -271,7 +271,7 @@ select.fi{cursor:pointer;height:34px;}
 
 <h1>🔍 LEENAI 統合ツール</h1>
 <div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.34 (2026-10-06) | ログイン削減: OutlookログインだけでCOMPASSにも自動接続（失敗時もOutlookログイン状態を維持）</span>
+  <span>LEENEAR CORPORATION — v2.35 (2026-10-07) | LC PDF原文復元: SMBC通知PDFの「0」を座標から正確に復元しAIの推測補完を排除</span>
   <span style="display:flex;align-items:center;gap:6px;">
     <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
     <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
@@ -1631,21 +1631,138 @@ function goTab(t){
 ============================================================ */
 async function b64(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f);});}
 
+/* ============================================================
+   v2.35 PR#5: LC PDF 原文復元
+   SMBC通知PDFは数字「0」を文字ではなく80×80等の小さな画像（スラッシュ付き0）で描画し、文字列側のその位置は空白になっている。
+   そのためテキスト層は「0」が欠落し、AIが桁数を推測して補う → 誤読（例: IP-PO0000025086 → IP-PO000025086）・
+   スペース混入（100PCT → 100 PCT）の原因になっていた。
+   画像の座標を文字の升目に対応させ「0」を座標から正確に復元する（推測なし）。
+============================================================ */
+const PDF_CMAP_URLS=['https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/'];
+async function ensurePdfJs(){
+  if(window.pdfjsLib) return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      res();
+    };
+    s.onerror=rej;
+    document.head.appendChild(s);
+  });
+}
+// 1ページ分の演算子リストから 文字行(glyph単位の座標つき) と 「0」画像 を取り出す
+async function readPdfPageParts(page){
+  const OPS=pdfjsLib.OPS; const ol=await page.getOperatorList();
+  const lines=[], imgs=[];
+  let size=0, tz=100, tc=0, tw=0, ox=0, oy=0, cx=0, curT=null; const stack=[];
+  const glyphChar=g=>{ if(g.unicode!==undefined&&g.unicode!=='') return g.unicode; if(g.isSpace) return ' '; return g.fontChar||'\uFFFD'; };
+  for(let i=0;i<ol.fnArray.length;i++){
+    const fn=ol.fnArray[i], a=ol.argsArray[i];
+    if(fn===OPS.beginText){ ox=0; oy=0; cx=0; }
+    else if(fn===OPS.setFont){ size=a[1]; }
+    else if(fn===OPS.setHScale){ tz=a[0]; }
+    else if(fn===OPS.setCharSpacing){ tc=a[0]; }
+    else if(fn===OPS.setWordSpacing){ tw=a[0]; }
+    else if(fn===OPS.moveText){ ox+=a[0]; oy+=a[1]; cx=ox; }
+    else if(fn===OPS.setTextMatrix){ ox=a[4]; oy=a[5]; cx=ox; }
+    else if(fn===OPS.showText || fn===OPS.showSpacedText){
+      const items=a[0]||[]; const g=[]; let x=cx;
+      for(const it of items){
+        if(typeof it==='number'){ x-=it/1000*size*(tz/100); continue; }
+        const adv=((it.width||0)/1000*size + tc + (it.isSpace?tw:0))*(tz/100);
+        g.push({ch:glyphChar(it), x, adv}); x+=adv;
+      }
+      cx=x; if(g.length) lines.push({y:oy, size, g});
+    }
+    else if(fn===OPS.save){ stack.push(curT); }
+    else if(fn===OPS.restore){ curT=stack.length?stack.pop():null; }
+    else if(fn===OPS.transform){ curT=a; }
+    else if(fn===OPS.paintImageMaskXObject){
+      // 「0」画像: 軸平行・実寸 20〜300 のマスク画像のみ対象（ロゴ等は除外）
+      if(curT && Math.abs(curT[1])<1e-6 && Math.abs(curT[2])<1e-6 && curT[0]>=20 && curT[0]<=300 && curT[3]>=20 && curT[3]<=300)
+        imgs.push({x:curT[4], y:curT[5], w:curT[0], h:curT[3]});
+    }
+  }
+  return {lines, imgs};
+}
+// 「0」画像を文字行の空白に対応させて復元（純粋関数）→ {zeros, failed}
+function matchZeroImages(lines, imgs){
+  const K=0.3219;   // 画像下端 → 文字行ベースラインの比率（SMBC通知PDFで実測: 25.75/80）
+  let zeros=0, failed=0;
+  for(const im of imgs){
+    const yexp=im.y+K*im.h; let done=false;
+    for(const L of lines){
+      if(Math.abs(L.y-yexp)>=8) continue;
+      let best=-1, bd=1e18;
+      for(let k=0;k<L.g.length;k++){ const d=Math.abs(L.g[k].x-im.x); if(d<bd){ bd=d; best=k; } }
+      if(best>=0 && bd<=L.g[best].adv*0.5 && L.g[best].ch===' '){ L.g[best].ch='0'; done=true; break; }
+    }
+    if(done) zeros++; else failed++;
+  }
+  return {zeros, failed};
+}
+// 文字行 → 読み順テキスト（同一行は x 順に空白で連結）
+function assemblePdfPageText(lines){
+  const ls=lines.map(L=>({y:L.y, x0:L.g[0].x, x1:L.g[L.g.length-1].x+L.g[L.g.length-1].adv, ref:(L.size||10)*0.5, t:L.g.map(c=>c.ch).join('')}))
+                .filter(L=>L.t.trim()!=='').sort((a,b)=>b.y-a.y||a.x0-b.x0);
+  const rows=[]; for(const L of ls){ const r=rows[rows.length-1]; if(r && Math.abs(r.y-L.y)<3) r.items.push(L); else rows.push({y:L.y, items:[L]}); }
+  return rows.map(r=>{
+    r.items.sort((a,b)=>a.x0-b.x0); let out=r.items[0].t.replace(/\s+$/,''), prevEnd=r.items[0].x1;
+    for(let i=1;i<r.items.length;i++){ const it=r.items[i]; const gap=Math.max(1,Math.min(40,Math.round((it.x0-prevEnd)/it.ref))); out+=' '.repeat(gap)+it.t.trim(); prevEnd=it.x1; }
+    return out;
+  }).join('\n');
+}
+// 通知PDFのページ見出し・改ページ表記を除去（内容には影響しない）
+function cleanLcPdfText(t){
+  return t.split('\n').filter(l=>!/^\s*\*\s\*\s\*/.test(l) && !/^\s*-CONTINUE-\s*$/.test(l)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+// LC PDF から原文を復元。復元できた(=「0」画像が存在し全て対応)場合のみ ok:true
+async function extractLcPdfExact(file, opts){
+  const urls=(opts&&opts.cMapUrls)||PDF_CMAP_URLS;
+  await ensurePdfJs();
+  const buf=await file.arrayBuffer();
+  let lastErr=null;
+  for(const u of urls){
+    try{
+      const pdf=await pdfjsLib.getDocument({data:buf.slice?buf.slice(0):buf, cMapUrl:u, cMapPacked:true}).promise;
+      let zeros=0, failed=0; const pages=[];
+      for(let i=1;i<=pdf.numPages;i++){
+        const page=await pdf.getPage(i); const parts=await readPdfPageParts(page);
+        const r=matchZeroImages(parts.lines, parts.imgs); zeros+=r.zeros; failed+=r.failed;
+        pages.push(assemblePdfPageText(parts.lines));
+      }
+      const text=cleanLcPdfText(pages.map((t,i)=>`--- Page ${i+1} ---\n${t}`).join('\n'));
+      const body=pages.join('').replace(/\s+/g,'');
+      return {ok: zeros>0 && failed===0 && body.length>200, zeros, failed, pages:pdf.numPages, text, textLen:body.length};
+    }catch(e){ lastErr=e; }
+  }
+  console.warn('LC PDF原文復元: CMap読込/解析に失敗 →従来方式へ', lastErr);
+  return {ok:false, zeros:0, failed:0, pages:0, text:'', textLen:0, error:String(lastErr&&lastErr.message||lastErr)};
+}
+// LC分析用: 原文復元が完全に成功したPDFは復元テキストを渡し、それ以外は従来方式（document/text）にフォールバック
+const lcPdfInfo={restored:[], partial:[], plain:[]};
+async function fileToContentLc(f){
+  const isPdf=f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf');
+  if(isPdf){
+    try{
+      const r=await extractLcPdfExact(f);
+      if(r.ok){
+        lcPdfInfo.restored.push({name:f.name, zeros:r.zeros, pages:r.pages, text:r.text});
+        return {type:'text', text:`=== ${f.name} (PDF原文を復元: 数字「0」${r.zeros}個を座標から復元済み) ===\n${r.text}`};
+      }
+      if(r.zeros>0 || r.failed>0) lcPdfInfo.partial.push({name:f.name, zeros:r.zeros, failed:r.failed});
+      else lcPdfInfo.plain.push({name:f.name});
+    }catch(e){ lcPdfInfo.plain.push({name:f.name}); }
+  }
+  return fileToContent(f);
+}
+
 /* PDF.js 텍스트 추출 — 텍스트 레이어가 있는 PDF는 텍스트로 직접 추출 */
 async function extractPdfText(file){
   try{
-    if(!window.pdfjsLib){
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        s.onload=()=>{
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-          res();
-        };
-        s.onerror=rej;
-        document.head.appendChild(s);
-      });
-    }
+    await ensurePdfJs();
     const buf=await file.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:buf}).promise;
     let text='';
@@ -1893,6 +2010,26 @@ function onLcFile(inp){
 function extractContractNo(filename){
   const m=filename.match(/([A-Z]{2,4}-\d{4}[A-Z0-9]{1,4})/);return m?m[1].toUpperCase():'';
 }
+// v2.35: LC分析結果の先頭に出す PDF原文復元の結果 / 警告
+function buildLcPdfNotice(allRestored){
+  if(allRestored){
+    const z=lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0);
+    return `📄 PDF原文復元: 数字「0」${z}個を座標から復元しました（AIの推測補完なし）\n\n`;
+  }
+  if(lcPdfInfo.partial.length){
+    const f=lcPdfInfo.partial.reduce((n,r)=>n+r.failed,0);
+    return `⚠️ 「0」の復元が不完全です（${f}個を対応付けできず）。AI読取のため、下記の数字・番号は必ず原本で確認してください\n\n`;
+  }
+  return `⚠️ PDF原文を復元できませんでした（AI読取）。下記の数字・番号は必ず原本で確認してください\n\n`;
+}
+// 復元できなかった場合に担当者が原本と照合するための 数字・番号の確認リスト
+function buildLcVerifyList(lc){
+  const rows=[]; const add=(k,v)=>{ if(v) rows.push(`  ・${k}: ${v}`); };
+  add('LC番号',lc.lcNo); add('金額',lc.amount); add('発行日',lc.lcDate); add('有効期限',lc.expiryDate); add('最終船積日',lc.latestShipment);
+  const text=[lc.commodity45A,(lc.docs46A||[]).join(' '),lc.addCond47A].join(' ');
+  [...new Set(text.match(/\b[A-Z]{1,6}[-\s]?[A-Z]{0,5}\d{6,}\b/g)||[])].slice(0,12).forEach(t=>add('識別番号',t));
+  return rows.length?`\n【数字・番号の確認リスト（原本と照合）】\n${rows.join('\n')}\n`:'';
+}
 async function analyzeLc(){
   const k=gk();if(!k){alert('先にAPI Keyを保存してください。');return;}
   const contractNo=document.getElementById('lcContNo').value.trim();
@@ -1904,11 +2041,30 @@ async function analyzeLc(){
   document.getElementById('lcMsg').textContent='ファイル読み込み中...';
   try{
     const content=[];
-    for(const f of lcFiles){content.push(await fileToContent(f));}
+    lcPdfInfo.restored=[]; lcPdfInfo.partial=[]; lcPdfInfo.plain=[];
+    for(const f of lcFiles){
+      document.getElementById('lcMsg').textContent='ファイル読み込み中（PDF原文を復元しています）...';
+      content.push(await fileToContentLc(f));
+    }
+    const allPdfRestored=lcPdfInfo.restored.length>0&&lcPdfInfo.partial.length===0&&lcPdfInfo.plain.length===0&&lcPdfInfo.restored.length===lcFiles.length;
+    const hasRestored=lcPdfInfo.restored.length>0;
     setStep(['ls1','ls2','ls3'],2);
     document.getElementById('lcMsg').textContent='AI分析中...（30秒〜1分かかります）';
+    const restoreNote=hasRestored?'【PDF原文について】上記のPDFテキストは、PDF内の座標情報から数字「0」を正確に復元した原文です（推測補完なし）。数字・記号・スペースは原文のまま一字一句転記し、スペースの追加・削除・正規化（例:「100PCT」を「100 PCT」にする）や桁数の補正は禁止。JSONの各値も原文の表記を変えずに記載すること。\n\n':'';
+    const rawTextInstr=allPdfRestored?'（LC全文はPDFから復元した原文を使用するため、RAW_TEXTの出力は不要です）':`上記JSONの直後に以下の形式でLC全文を出力（必須）:
+RAW_TEXT_START
+[ここにLC全文テキストを記載 — 以下を漏れなく含めること]
+- LC番号・発行日・有効期限・最終船積日
+- 発行銀行・通知銀行・買主・売主（全住所含む）
+- 金額・TOLERANCE・PARTIAL/TRANSHIP条件
+- 42C全文 / 45A全文（一字一句）/ 46A全書類と枚数 / 47A全条項
+- 44E積地 / 44F揚地 / 43P / 43T
+- CONSIGNEE全文 / NOTIFY PARTY全文（TEL/FAX含む）
+- 保険条件全文 / 提示期間 / Discrepancy Fee
+- その他特記事項
+RAW_TEXT_END`;
     content.push({type:'text',text:`
-以下のLCを詳細分析し、JSONのみ出力してください（前置き・説明不要）。
+${restoreNote}以下のLCを詳細分析し、JSONのみ出力してください（前置き・説明不要）。
 {
   "id": "${contractNo||Date.now()}",
   "contractNo": "${contractNo}",
@@ -1954,18 +2110,7 @@ async function analyzeLc(){
   "fileNames": ${JSON.stringify(lcFiles.map(f=>f.name))}
 }
 
-上記JSONの直後に以下の形式でLC全文を出力（必須）:
-RAW_TEXT_START
-[ここにLC全文テキストを記載 — 以下を漏れなく含めること]
-- LC番号・発行日・有効期限・最終船積日
-- 発行銀行・通知銀行・買主・売主（全住所含む）
-- 金額・TOLERANCE・PARTIAL/TRANSHIP条件
-- 42C全文 / 45A全文（一字一句）/ 46A全書類と枚数 / 47A全条項
-- 44E積地 / 44F揚地 / 43P / 43T
-- CONSIGNEE全文 / NOTIFY PARTY全文（TEL/FAX含む）
-- 保険条件全文 / 提示期間 / Discrepancy Fee
-- その他特記事項
-RAW_TEXT_END`});
+${rawTextInstr}`});
     const raw=await callApi([{role:'user',content}],8000);
     const cleaned=raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
     const rawTextMatch=raw.match(/RAW_TEXT_START([\s\S]*?)RAW_TEXT_END/);
@@ -1995,6 +2140,10 @@ RAW_TEXT_END`});
         lcData=JSON.parse(fixed);
       }catch(e2){throw new Error('JSONパースエラー: '+pe.message);}
     }
+    if(allPdfRestored){   // v2.35: AIが書き直した全文ではなく、PDFから復元した原文をそのまま保存（以降のACL/FD照合で正確なLC原文を使用）
+      lcData.rawText=lcPdfInfo.restored.map(r=>`=== ${r.name} ===\n${r.text}`).join('\n\n');
+      lcData.pdfRestore={zeros:lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0), files:lcPdfInfo.restored.map(r=>r.name), restoredAt:new Date().toISOString()};
+    }
     if(rawTextExtracted&&!lcData.rawText)lcData.rawText=rawTextExtracted;
     if(!lcData.rawText)lcData.rawText=cleaned.slice(0,4000);
     if(!lcData.contractNo&&contractNo)lcData.contractNo=contractNo;
@@ -2003,10 +2152,10 @@ RAW_TEXT_END`});
     lastAnalyzedId=lcData.id;
     saveLcToStorage();
     setStep(['ls1','ls2','ls3'],3);
-    document.getElementById('lcMsg').textContent='保存完了';
+    document.getElementById('lcMsg').textContent=allPdfRestored?`保存完了（📄 PDF原文復元: 「0」${lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0)}個を復元）`:'保存完了';
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcResult').style.display='block';
-    document.getElementById('lcResBox').textContent=formatLc(lcData);
+    document.getElementById('lcResBox').textContent=buildLcPdfNotice(allPdfRestored)+formatLc(lcData)+(allPdfRestored?'':buildLcVerifyList(lcData));
     autoSaveToSP(lcData).then(fname=>{
       const note=document.getElementById('lcSaveNote');
       note.innerHTML=fname?`✅ SharePointに保存しました: <strong>${fname}</strong>`:'✅ ローカルに保存しました（SP未接続のため手動保存推奨）';
@@ -2102,9 +2251,11 @@ async function runAmend(){
   document.getElementById('amendMsg').textContent='アメンドファイル読込中...';
   try{
     const content=[];
+    lcPdfInfo.restored=[]; lcPdfInfo.partial=[]; lcPdfInfo.plain=[];
     for(const f of amendFiles){
-      content.push(await fileToContent(f));
+      content.push(await fileToContentLc(f));   // v2.35: 改訂通知も同形式のPDFなので「0」を座標から復元
     }
+    const amendNote=lcPdfInfo.restored.length>0?'【PDF原文について】上記のPDFテキストは、PDF内の座標情報から数字「0」を正確に復元した原文です（推測補完なし）。数字・記号・スペースは原文のまま転記し、スペースの追加・削除・正規化や桁数の補正は禁止。\n\n':'';
     setStep(['ams1','ams2','ams3'],2);
     document.getElementById('amendMsg').textContent='変更点を抽出中...';
 
@@ -2125,7 +2276,7 @@ LC番号: ${origLc.lcNo||''}
 47A(追加条件): ${(origLc.addCond47A||'').slice(0,300)}`;
 
     const raw=await callApi([{role:'user',content:[...content,{type:'text',text:
-`あなたはLEENEAR CORPORATIONの貿易書類専門家です。
+`${amendNote}あなたはLEENEAR CORPORATIONの貿易書類専門家です。
 アメンド書類（信用状条件変更通知）を分析し、変更された項目のみをJSONで返してください。
 
 ${origSummary}
