@@ -1,34 +1,25 @@
 <!DOCTYPE html>
-<html lang="ja" data-theme="leenai">
+<html lang="ja" data-theme="dark">
 <head>
-<script>
-  if (location.search.includes('code=')) {
-    const code = new URLSearchParams(location.search).get('code');
-    if (window.opener) { window.opener.postMessage({ code }, location.origin); window.close(); }
-  }
-</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>LEENAI 統合ツール v2.41 — LEENEAR</title>
+<link id="leenaiFavicon" rel="icon">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://mhlee205.github.io/LEENAI_COMMON/v1/leenai-common.css">
+<script src="https://mhlee205.github.io/LEENAI_COMMON/v1/leenai-common.js"></script>
+<script>if(!window.LEENAI){document.addEventListener('DOMContentLoaded',function(){document.body.innerHTML='<div style="padding:40px;font-family:sans-serif">共通ファイルの読み込みに失敗しました。ページを再読み込みしてください。</div>';});}</script>
 <style>
 /* ============================================================
    SECTION: COMMON_STYLES
 ============================================================ */
 :root{
-  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#1f2b40;
-  --border:#2e3350;--border2:#3a4460;
-  --accent:#4f7cff;--accent2:#7c4fff;
   --teal:#0d9488;--teal2:#0891b2;--tealg:linear-gradient(135deg,#0d9488,#0891b2);
-  --ok:#22c55e;--ng:#ef4444;--warn:#f59e0b;--info:#60a5fa;--purple:#a78bfa;
-  --text:#e8eaf0;--sub:#8b90a8;--sub2:#4a5f80;--r:12px;
+  --ng:var(--danger);--info:var(--info);--purple:#a78bfa;
+  --sub:var(--text2);--sub2:var(--text3);--r:12px;
   --shadow:0 4px 24px rgba(0,0,0,.35);
 }
-[data-theme="light"]{--bg:#FAF9F8;--surface:#FFFFFF;--surface2:#F3F2F1;--surface3:#EDEBE9;--border:#E1DFDD;--text:#201F1E;--sub:#605E5C;--sub2:#A19F9D;--accent:#0F6CBD;}
-[data-theme="leenai"]{--bg:#E9EEE8;--surface:#F4F5F7;--surface2:#E1E8E0;--surface3:#D5DFD3;--border:#B9C7B7;--text:#1F2A22;--sub:#4F5E52;--sub2:#6D7B71;--accent:#2F6B45;}
-[data-theme="focus"]{--bg:#E7EAF0;--surface:#F4F5F7;--surface2:#DDE2EA;--surface3:#CFD6E2;--border:#AEB8C8;--text:#202733;--sub:#515C6C;--sub2:#697587;--accent:#315F9E;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:14px 12px 90px;max-width:1200px;margin:0 auto;}
+body{font-family:'Segoe UI','Hiragino Sans','Yu Gothic UI',sans-serif;padding:0;}
 h1{font-size:1.1rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px;}
 .ver{font-size:.76rem;color:var(--sub);margin-bottom:12px;}
 /* API bar */
@@ -257,27 +248,9 @@ select.fi{cursor:pointer;height:34px;}
 </style>
 </head>
 <body>
-
-<div id="loginGate" style="display:flex;position:fixed;inset:0;background:#0f1117;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
-  <div style="font-size:40px;font-weight:800;letter-spacing:3px;color:#e2e8f0;">LEEN<span style="color:#4f8ef7">AI</span></div>
-  <div style="font-size:11px;color:var(--ac,#4f8ef7);font-weight:700;letter-spacing:1px;">SYS-D-01</div>
-  <div style="font-size:16px;color:var(--tx,#e2e8f0);font-weight:700;">LC / FD 統合チェッカー</div>
-  <div style="font-size:12px;color:var(--tx2,#8892a4);">v2.41</div>
-  <div style="width:48px;height:1px;background:#2e3350;margin:12px 0;"></div>
-  <div style="font-size:12px;color:#4a5568;text-align:center;line-height:1.8;">このツールを使用するには<br>Outlookアカウントでのログインが必要です</div>
-  <button id="gateLoginBtn" onclick="gateLogin()" style="margin-top:8px;background:#4f8ef7;color:#fff;border:none;padding:11px 32px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif;display:inline-flex;align-items:center;gap:8px;">🔑 Outlookでログイン</button>
-  <div id="gateStatus" style="font-size:11px;color:#8892a4;height:18px;"></div>
-</div>
-
-<h1>🔍 LEENAI 統合ツール</h1>
-<div class="ver" id="header-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-  <span>LEENEAR CORPORATION — v2.41 (2026-10-07) | SIパーサ改善: 品名(NAME OF GOODS)・単価 / Notify名・住所の分離 / Consignee(TO THE ORDER OF) / Invoice文言の誤検出 / AI補完のLC NO除外</span>
-  <span style="display:flex;align-items:center;gap:6px;">
-    <span id="authStatus" style="font-size:12px;color:#8892a4;margin-right:8px;">⚪ 未ログイン</span>
-    <button id="authBtn" onclick="toggleAuth()" style="background:transparent;color:#8892a4;border:1px solid #2e3350;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Segoe UI',sans-serif;">🔑 Outlookログイン</button>
-    <button id="themeToggleBtn" onclick="toggleTheme()" style="font-size:.80rem;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--sub);cursor:pointer;">🌙 ダーク</button>
-  </span>
-</div>
+<div id="app" style="display:none">
+<!-- ln-header は LEENAI が挿入 -->
+<div style="padding:14px 12px 90px;max-width:1200px;margin:0 auto;">
 
 <!-- API KEY BAR -->
 <div class="api-bar">
@@ -619,8 +592,8 @@ select.fi{cursor:pointer;height:34px;}
   <!-- COMPASS 로그인 배너 -->
   <div id="compDvBanner" class="comp-dv-banner" style="display:none;">
     <span>🔑 <strong>COMPASS</strong> に接続すると過去SIを自動参照できます</span>
-    <button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.78rem;font-weight:700;padding:5px 14px;cursor:pointer;">
-      COMPASSにログイン
+    <button onclick="LEENAI.logout()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.78rem;font-weight:700;padding:5px 14px;cursor:pointer;">
+      再ログイン
     </button>
   </div>
 
@@ -756,97 +729,7 @@ select.fi{cursor:pointer;height:34px;}
 </div>
 
 <script>
-// ── OAuth2 PKCE ─────────────────────────────────────────────
-const OAUTH_CFG = {
-  clientId: 'f071a165-5e9b-44bf-b6a1-baba654524db',
-  tenantId: 'a56988ff-c2b8-4df8-9727-889ad4205198',
-  scopes:   'User.Read Files.ReadWrite offline_access',
-  redirectUri: 'https://mhlee205.github.io/LC_FD_CHECKER/'
-};
-let loggedIn = false, loggedInUser = '', accessToken = '';
-let refreshToken = '', tokenExpiry = 0;   // v2.24: トークン自動更新用
-
-function _b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,''); }
-async function _sha256(s){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
-async function startOAuthFlow(){
-  const verifier = _b64url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = _b64url(await _sha256(verifier));
-  sessionStorage.setItem('pkce_v', verifier);
-  const p = new URLSearchParams({ client_id:OAUTH_CFG.clientId, response_type:'code', redirect_uri:OAUTH_CFG.redirectUri, scope:OAUTH_CFG.scopes, code_challenge:challenge, code_challenge_method:'S256', response_mode:'query' });
-  const popup = window.open(`https://login.microsoftonline.com/${OAUTH_CFG.tenantId}/oauth2/v2.0/authorize?${p}`, 'oauth', 'width=520,height=620');
-  return new Promise((resolve, reject) => {
-    const handler = async (e) => {
-      if (!e.data?.code) return;
-      window.removeEventListener('message', handler);
-      try {
-        const body = new URLSearchParams({ client_id:OAUTH_CFG.clientId, grant_type:'authorization_code', code:e.data.code, redirect_uri:OAUTH_CFG.redirectUri, code_verifier:sessionStorage.getItem('pkce_v') });
-        const r = await fetch(`https://login.microsoftonline.com/${OAUTH_CFG.tenantId}/oauth2/v2.0/token`, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-        const t = await r.json();
-        if (t.error) throw new Error(t.error_description || t.error);
-        accessToken = t.access_token;
-        refreshToken = t.refresh_token || '';
-        tokenExpiry  = Date.now() + ((t.expires_in || 3600) * 1000);
-        const u = await (await fetch('https://graph.microsoft.com/v1.0/me', {headers:{Authorization:'Bearer '+accessToken}})).json();
-        loggedIn = true; loggedInUser = u.displayName || u.mail || u.userPrincipalName;
-        updateAuthUI(true, loggedInUser); resolve();
-        acquireDvTokenViaRefresh();   // v2.34: 同じログインでCOMPASS(Dataverse)用トークンも静かに取得（失敗時は従来のCOMPASSログイン）
-      } catch(err){ reject(err); }
-    };
-    window.addEventListener('message', handler);
-    const iv = setInterval(() => { if (popup.closed){ clearInterval(iv); window.removeEventListener('message',handler); reject(new Error('CANCELLED')); } }, 500);
-  });
-}
-function toggleAuth(){
-  if (loggedIn){ loggedIn=false; loggedInUser=''; accessToken=''; refreshToken=''; tokenExpiry=0; dvToken=null; dvExpiry=0; clearTimeout(dvRenewTimer); refreshDvBanner(); updateAuthUI(false); }
-  else { startOAuthFlow().catch(e => { if (e.message!=='CANCELLED') console.error(e); }); }
-}
-/* v2.24: refresh_token でアクセストークンを更新（失敗時は再ログインを促す） */
-async function refreshGraphToken(silent=false){
-  if (!refreshToken) return false;
-  try {
-    const body = new URLSearchParams({ client_id:OAUTH_CFG.clientId, grant_type:'refresh_token', refresh_token:refreshToken, scope:OAUTH_CFG.scopes });
-    const r = await fetch(`https://login.microsoftonline.com/${OAUTH_CFG.tenantId}/oauth2/v2.0/token`, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
-    const t = await r.json();
-    if (t.error || !t.access_token) throw new Error(t.error_description || t.error || 'refresh failed');
-    accessToken = t.access_token;
-    if (t.refresh_token) refreshToken = t.refresh_token;
-    tokenExpiry = Date.now() + ((t.expires_in || 3600) * 1000);
-    return true;
-  } catch(e){
-    console.warn('トークン更新エラー:', e);
-    accessToken=''; refreshToken=''; tokenExpiry=0; loggedIn=false; loggedInUser='';
-    updateAuthUI(false);
-    if(!silent) updateSpStatus('⚠ セッションの有効期限が切れました。再度Outlookログインしてください。', false);
-    return false;
-  }
-}
-function updateAuthUI(isLoggedIn, user){
-  const st = document.getElementById('authStatus');
-  const btn = document.getElementById('authBtn');
-  if (!st || !btn) return;
-  if (isLoggedIn){
-    st.textContent = `🟢 ${user}`; st.style.color = '#22c55e';
-    btn.textContent = '🔓 ログアウト';
-    const gate = document.getElementById('loginGate'); if (gate) gate.style.display = 'none';
-    syncFromSP(true);
-  } else {
-    st.textContent = '⚪ 未ログイン'; st.style.color = '';
-    btn.textContent = '🔑 Outlookログイン';
-    updateSpStatus('SharePoint: Outlookログイン後に自動同期',false);
-  }
-}
-async function gateLogin() {
-  const btn = document.getElementById('gateLoginBtn');
-  btn.disabled = true;
-  document.getElementById('gateStatus').textContent = 'ログイン中...';
-  try {
-    await startOAuthFlow();
-  } catch(e) {
-    btn.disabled = false;
-    document.getElementById('gateStatus').textContent = e.message !== 'CANCELLED' ? 'エラー: ' + e.message : '';
-  }
-}
-// ── end OAuth ────────────────────────────────────────────────
+// ── LEENAI_COMMON v1.7 適用: 認証は共通ファイルに委譲 ──────
 
 /* ============================================================
    SECTION: CONSTANTS
@@ -1005,111 +888,10 @@ function pickExcelPastSIs(lc, data, now){
    COMPASS Dataverse 직접 연결 인프라 (Phase2~)
    ※ dvToken은 이 섹션에서만 관리. graphToken と混用禁止。
 ============================================================ */
-const DV_CLIENT_ID   = 'f071a165-5e9b-44bf-b6a1-baba654524db';
-const DV_TENANT_ID   = 'a56988ff-c2b8-4df8-9727-889ad4205198';
-const DV_REDIRECT    = 'https://mhlee205.github.io/LC_FD_CHECKER/';
-const DV_SCOPE       = 'https://orgde512c6f.crm7.dynamics.com/user_impersonation offline_access';
-const DV_API         = 'https://orgde512c6f.crm7.dynamics.com/api/data/v9.2';
+const DV_API = 'https://orgde512c6f.crm7.dynamics.com/api/data/v9.2';
 
-let dvToken  = null;
-let dvExpiry = 0;
-let dvRenewTimer = null, dvRtOnce = '', dvRenewFailTs = 0;   // v2.34
-
-function dvTokenValid() { return dvToken && Date.now() < dvExpiry; }
-
-function _b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
-async function _sha256(s){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); }
-function _randStr(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return _b64url(a).slice(0,n); }
-
-async function startDvLogin() {
-  const v=_randStr(64), st=_randStr(16);
-  const ch=_b64url(await _sha256(v));
-  sessionStorage.setItem('dv_pkce_v',v);
-  sessionStorage.setItem('dv_pkce_s',st);
-  sessionStorage.setItem('dv_return_tab','comp');
-  // v2.34: 画面遷移でメモリ上のOutlookログイン情報が消えるため、遷移中のみ一時保管（復元後すぐ削除）
-  if(refreshToken) sessionStorage.setItem('gr_rt', refreshToken);
-  const p=new URLSearchParams({
-    client_id:DV_CLIENT_ID, response_type:'code',
-    redirect_uri:DV_REDIRECT, scope:DV_SCOPE,
-    state:st, code_challenge:ch, code_challenge_method:'S256',
-    prompt:'select_account'
-  });
-  location.href=`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/authorize?${p}`;
-}
-
-async function handleDvCallback() {
-  const p=new URLSearchParams(location.search);
-  const code=p.get('code'), st=p.get('state');
-  if(!code) return false;
-  if(st!==sessionStorage.getItem('dv_pkce_s')){ console.warn('DV state mismatch'); return false; }
-  const v=sessionStorage.getItem('dv_pkce_v');
-  const res=await fetch(`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/token`,{
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:new URLSearchParams({
-      client_id:DV_CLIENT_ID, grant_type:'authorization_code',
-      code, redirect_uri:DV_REDIRECT,
-      code_verifier:v, scope:DV_SCOPE
-    })
-  });
-  const d=await res.json();
-  if(d.error){ console.error('DV Token error:',d.error_description); return false; }
-  dvToken=d.access_token;
-  dvExpiry=Date.now()+(d.expires_in-60)*1000;
-  dvRtOnce=d.refresh_token||'';   // v2.34: COMPASS先ログイン時にOutlook(Graph)ログインを自動復元するために使用（メモリのみ・使用後に破棄）
-  sessionStorage.removeItem('dv_pkce_v');
-  sessionStorage.removeItem('dv_pkce_s');
-  history.replaceState({},'',DV_REDIRECT);
-  return true;
-}
-
-
-/* ------------------------------------------------------------
-   v2.34: ログイン回数の削減（Outlook と COMPASS は同じアプリ・同じ組織アカウント）
-   ① Outlookログインで得たリフレッシュトークンから COMPASS(Dataverse) 用トークンを静かに取得 → ログイン1回
-   ② 取得できない場合は従来どおりCOMPASSログイン（画面遷移）。遷移前にリフレッシュトークンを一時保管し、
-      戻った後に復元して Outlook の再ログインを不要にする → 最大2回
-   ・トークンは永続保存しない（メモリ。遷移中のみ sessionStorage に一時保管し、復元後すぐ削除）
------------------------------------------------------------- */
-function refreshDvBanner(){ const b=document.getElementById('compDvBanner'); if(b) b.style.display=dvTokenValid()?'none':''; }
-function scheduleDvRenew(){
-  clearTimeout(dvRenewTimer);
-  const ms=Math.max(30000, dvExpiry-Date.now()-5*60*1000);          // 期限の5分前に更新
-  dvRenewTimer=setTimeout(()=>{ acquireDvTokenViaRefresh(); }, ms);
-}
-async function acquireDvTokenViaRefresh(){
-  if(!refreshToken) return false;
-  if(Date.now()-dvRenewFailTs < 60000) return false;                 // 失敗直後の連続リトライを避ける
-  try{
-    const r=await fetch(`https://login.microsoftonline.com/${DV_TENANT_ID}/oauth2/v2.0/token`,{
-      method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:new URLSearchParams({client_id:DV_CLIENT_ID, grant_type:'refresh_token', refresh_token:refreshToken, scope:DV_SCOPE})
-    });
-    const t=await r.json();
-    if(t.error||!t.access_token) throw new Error(t.error_description||t.error||'refresh failed');
-    dvToken=t.access_token; dvExpiry=Date.now()+((t.expires_in||3600)-60)*1000;
-    if(t.refresh_token) refreshToken=t.refresh_token;
-    dvRenewFailTs=0; scheduleDvRenew(); refreshDvBanner();
-    return true;
-  }catch(e){
-    dvRenewFailTs=Date.now();
-    console.warn('COMPASSトークンの自動取得に失敗（COMPASSログインが必要）:', e.message||e);
-    return false;
-  }
-}
-async function ensureDvToken(){ return dvTokenValid() ? true : await acquireDvTokenViaRefresh(); }
-// リフレッシュトークンから Outlook(Graph) ログイン状態を復元（成功: true）
-async function loginGraphFromRefresh(rt){
-  if(!rt) return false;
-  refreshToken=rt;
-  if(!(await refreshGraphToken(true))) return false;
-  let name='';
-  try{ const u=await (await fetch('https://graph.microsoft.com/v1.0/me',{headers:{Authorization:'Bearer '+accessToken}})).json(); name=u.displayName||u.mail||u.userPrincipalName||''; }catch(e){}
-  loggedIn=true; loggedInUser=name||'ログイン済み';
-  updateAuthUI(true, loggedInUser);
-  return true;
-}
+function dvTokenValid(){ return LEENAI.auth.status.dataverse==='ok'; }
+function refreshDvBanner(){ var b=document.getElementById('compDvBanner'); if(b) b.style.display=dvTokenValid()?'none':''; }
 
 /* ============================================================
    SECTION: SHAREPOINT — Graph API (v2.23 / 安定化 v2.24)
@@ -1122,24 +904,20 @@ const SP_PATH_HIST= '古紙/-. AI 活用/D-01-LC_FD_CHECKER/履歴';
 const spEnc=p=>p.split('/').map(encodeURIComponent).join('/');
 const spItemUrl=p=>`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${spEnc(p)}`;
 
-/* v2.24: 期限前にトークンを先回り更新 */
-async function ensureGraphToken(){
-  if(!accessToken) throw new Error('Graph未認証');
-  if(tokenExpiry && Date.now() > tokenExpiry - 120000) await refreshGraphToken();
-  if(!accessToken) throw new Error('Graph未認証');
-}
-/* v2.24: 共通fetch — 401でトークン更新して1回再試行 / 429・5xxはRetry-After尊重で最大3回リトライ */
-async function graphFetch(url, opts={}, _retry=0){
-  await ensureGraphToken();
-  const headers=Object.assign({'Authorization':`Bearer ${accessToken}`}, opts.headers||{});
-  const res=await fetch(url, Object.assign({}, opts, {headers}));
-  if(res.status===401 && _retry===0 && refreshToken){
-    if(await refreshGraphToken()) return graphFetch(url, opts, 1);
+/* v3.0: Graph トークンは LEENAI_COMMON から取得 */
+async function graphFetch(url, opts, _retry){
+  _retry=_retry||0;
+  var grTok=await LEENAI.auth.token('graph');
+  if(!grTok) throw new Error('Graph未認証（SharePoint機能はOutlookログイン後に使用可能）');
+  var headers=Object.assign({'Authorization':'Bearer '+grTok}, opts&&opts.headers||{});
+  var res=await fetch(url, Object.assign({}, opts||{}, {headers:headers}));
+  if(res.status===401 && _retry===0){
+    return graphFetch(url, opts, 1);  // LEENAI.auth.token が自動更新
   }
   if((res.status===429 || res.status>=500) && _retry<3){
-    const ra=parseInt(res.headers.get('Retry-After')||'',10);
-    const wait=Number.isFinite(ra)?Math.min(ra*1000,30000):Math.min(8000,1000*Math.pow(2,_retry));
-    await new Promise(r=>setTimeout(r,wait));
+    var ra=parseInt(res.headers.get('Retry-After')||'',10);
+    var wait=Number.isFinite(ra)?Math.min(ra*1000,30000):Math.min(8000,1000*Math.pow(2,_retry));
+    await new Promise(function(r){setTimeout(r,wait);});
     return graphFetch(url, opts, _retry+1);
   }
   return res;
@@ -1216,18 +994,18 @@ function updateSpStatus(msg, ok=true){
   if(el){ el.textContent=msg; el.style.color=ok?'#86efac':'#f59e0b'; }
 }
 async function dvGet(path) {
-  if(!dvTokenValid()) await acquireDvTokenViaRefresh();   // v2.34: 期限切れなら静かに更新
-  const res=await fetch(`${DV_API}/${path}`,{
+  var tok=await LEENAI.auth.token('dataverse');
+  var res=await fetch(DV_API+'/'+path,{
     headers:{
-      'Authorization':`Bearer ${dvToken}`,
+      'Authorization':'Bearer '+tok,
       'OData-MaxVersion':'4.0','OData-Version':'4.0',
       'Accept':'application/json',
       'Prefer':'odata.include-annotations="OData.Community.Display.V1.FormattedValue"'
     }
   });
   if(!res.ok){
-    const e=await res.json().catch(()=>({}));
-    throw new Error(`DV API ${res.status}: ${e?.error?.message||res.statusText}`);
+    var e=await res.json().catch(function(){return {};});
+    throw new Error('DV API '+res.status+': '+(e&&e.error&&e.error.message||res.statusText));
   }
   return res.json();
 }
@@ -1239,7 +1017,7 @@ async function fetchPastSIs(contractNo, lcNo) {
   //   ・同一形式(=同一銀行)の過去SIが無い場合(初回銀行)も参照しない（全銀行へのフォールバック禁止）
   //   ・バイヤーはContract番号から抽出したコードの完全一致のみ（contains部分一致による他バイヤー混入を排除）
   pastSiRefInfo = {reason:'', buyerCode:null, bankGroup:null, lcNo:lcNo||''};
-  if(!(await ensureDvToken())) return [];                  // v2.34: 期限切れでもリフレッシュで更新できれば続行
+  if(!dvTokenValid()) return [];
   try {
     const buyerCode = extractBuyerCode(contractNo);
     pastSiRefInfo.buyerCode = buyerCode;
@@ -1352,16 +1130,18 @@ let siRefLoaded=false;    // 로드 완료 여부
 /* FILE_SYSTEM_API removed — SP統合 v2.23 */
 /* ローカルフォルダ関連関数 removed — SP統合 v2.23 */
 async function autoSaveToSP(lc){
-  if(!accessToken) return false;
+  if(LEENAI.auth.status.graph!=='ok') return false;
   try{
     const fname=makeLcFileName(lc);
     await graphPut(`${SP_PATH_LC}/${fname}`,[lc]);
     return fname;
   }catch(e){console.warn('SP保存エラー:',e);return false;}
 }
-async function syncFromSP(silent=false){
-  if(!accessToken){
-    updateSpStatus('⚠ SharePoint未接続（Outlookログインが必要）',false);
+async function syncFromSP(silent){
+  silent=silent||false;
+  var grStatus=LEENAI.auth.status;
+  if(grStatus.graph!=='ok'){
+    updateSpStatus('⚠ SharePoint未接続（Graph権限が必要）',false);
     return false;
   }
   updateSpStatus('⟳ SharePoint同期中...');
@@ -1449,7 +1229,7 @@ async function syncFromSP(silent=false){
    SECTION: TT_DP_JSON — TT/DP JSON 자동 생성
 ============================================================ */
 async function autoGenerateTtJson(knownItems){
-  if(!siRefData.length||!accessToken)return;
+  if(!siRefData.length||LEENAI.auth.status.graph!=='ok')return;
   const CN_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_no';
   const CL_KEY='cr49f_s_i.crcf9_payment_classification';
   const DATE_KEY='cr49f_sale_detail.cr49f_sale_contract.cr49f_sale_contract_date';
@@ -3192,7 +2972,7 @@ function parseAclText(text){
 async function fetchCompassShipment(invNo){
   const inv=String(invNo||'').trim();
   if(!/^[A-Za-z0-9_\-]+$/.test(inv)) return {ok:false,reason:'Invoice番号の形式が不正'};
-  if(!(await ensureDvToken())) return {ok:false,reason:'COMPASS未接続'};
+  if(!dvTokenValid()) return {ok:false,reason:'COMPASS未接続'};
   try{
     const bk=await dvGet(`cr49f_bookings?$filter=cr49f_invoice_no eq '${inv}'&$select=cr49f_bookingid,cr49f_booking_no,cr49f_bl_number,cr49f_main_ship_name,cr49f_etd,cr49f_eta,cr49f_invoice_no,_cr49f_sale_contract_id_value`);
     if(!bk.value||!bk.value.length) return {ok:false,reason:`COMPASSに Invoice ${inv} のブッキングがありません`};
@@ -3559,7 +3339,7 @@ OVERALL: OK または NG または WARN`;
 ============================================================ */
 async function saveAclHistory(){
   if(!aclCheckResult){alert('保存するACLチェック結果がありません');return;}
-  if(!accessToken){alert('SharePoint接続が必要です。右上でOutlookログインしてください。');return;}
+  if(LEENAI.auth.status.graph!=='ok'){alert('SharePoint接続が必要です。ログインしてください。');return;}
   try{
     const suffix=aclCheckResult.mode==='tt'?'SI':'ACL';
     const fname=`${aclCheckResult.invoiceNo}_${suffix}_${aclCheckResult.checkedAt}.json`;
@@ -3576,8 +3356,8 @@ async function saveAclHistory(){
 async function searchAclHistory(){
   const q=(document.getElementById('blInvSearch')?.value||'').trim().toLowerCase();
   const el=document.getElementById('blHistList');
-  if(!accessToken){
-    el.innerHTML='<div class="empty">右上でOutlookログイン後に利用できます</div>';
+  if(LEENAI.auth.status.graph!=='ok'){
+    el.innerHTML='<div class="empty">ログイン後に利用できます</div>';
     return;
   }
   el.innerHTML='<div class="empty">⟳ SharePointを検索中...</div>';
@@ -3614,11 +3394,12 @@ async function searchAclHistory(){
   }
 }
 async function loadAclHistory(fname){
-  if(!accessToken){alert('Outlookログインが必要です');return;}
+  var _grTok=await LEENAI.auth.token('graph');
+  if(!_grTok){alert('Outlookログインが必要です');return;}
   try{
     const encoded=`${SP_PATH_HIST}/${fname}`.split('/').map(encodeURIComponent).join('/');
     const res=await fetch(`${GRAPH_BASE}drives/${SP_DRIVE_ID}/root:/${encoded}:/content`,{
-      headers:{'Authorization':`Bearer ${accessToken}`,'Accept':'application/json'}
+      headers:{'Authorization':'Bearer '+_grTok,'Accept':'application/json'}
     });
     if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     loadedAclHistory=await res.json();
@@ -3817,7 +3598,7 @@ OVERALL: OK または NG または WARN
       loadedAclHistory.extractedData.blNo=blNoM[1].trim();
       loadedAclHistory.blCheckedAt=new Date().toISOString().slice(0,10);
       // SP自動更新保存
-      if(accessToken){
+      if(LEENAI.auth.status.graph==='ok'){
         try{
           const fname=`${loadedAclHistory.invoiceNo}_ACL_${loadedAclHistory.checkedAt}.json`;
           await graphPut(`${SP_PATH_HIST}/${fname}`,loadedAclHistory);
@@ -4223,9 +4004,9 @@ function initCompLC(lc){
   pastSIsData=[];
   pastSiRefInfo={reason:'',buyerCode:null,bankGroup:null,lcNo:''};  // v2.29: 前LCの参照情報を持ち越さない
   renderPastSiPanel([],null,null);
-  if(dvTokenValid()||refreshToken){
+  if(dvTokenValid()){
     fetchPastSIs(lc.contractNo||'',lc.lcNo||'').then(pastSIs=>{
-      if(!dvTokenValid()){   // v2.34: 自動更新に失敗 → 従来どおり（COMPASSログイン案内 + Excel参照）
+      if(!dvTokenValid()){
         renderPastSiPanel([],null,null);
         if(siRefLoaded&&siRefData.length) runSiRefImprove(lc,null);
         refreshDvBanner();
@@ -4268,9 +4049,7 @@ function renderPastSiPanel(pastSIs, buyerCode, bankGroup) {
       ? (noRefMsg
           ? `<div class="alert alert-info" style="font-size:.78rem;line-height:1.5;">${noRefMsg}</div>`
           : `<div class="empty" style="font-size:.78rem;">過去SIが見つかりませんでした</div>`)
-      : `<div class="empty" style="font-size:.78rem;">
-      <button onclick="startDvLogin()" style="background:var(--tealg);border:none;border-radius:6px;color:#fff;font-size:.78rem;padding:5px 14px;cursor:pointer;margin-top:4px;">🔑 COMPASSにログイン</button>
-    </div>`;
+      : `<div class="empty" style="font-size:.78rem;">COMPASS未接続 — ログインしてください</div>`;
     return;
   }
 
@@ -5358,66 +5137,35 @@ function clearHist(){if(confirm('履歴を削除しますか？')){hist=[];rende
 function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ============================================================
-   SECTION: INIT
+   SECTION: INIT — LEENAI_COMMON v3.0
 ============================================================ */
-window.addEventListener('DOMContentLoaded',async()=>{
-  // COMPASS DV 콜백 처리
-  let dvReturned=false, dvOk=false;
-  if(new URLSearchParams(location.search).get('code')) {
-    dvReturned=true;
-    dvOk = await handleDvCallback();
-    const gate = document.getElementById('loginGate');
-    if(gate) gate.style.display = 'none';
-    const retTab = sessionStorage.getItem('dv_return_tab');
-    if(retTab) { sessionStorage.removeItem('dv_return_tab'); goTab(retTab); }
-  }
-  const k=gk();
-  if(k)setSt(`✅ API Key登録済み (${k.slice(0,16)}...)`,'ok');
+function startTool(){
+  // ログイン完了後の初期化
+  var k=gk();
+  if(k)setSt('✅ API Key登録済み ('+k.slice(0,16)+'...)','ok');
   else setSt('⚠️ API Key未登録 — 入力して保存してください','ng');
   loadLcFromStorage();
   renderLcRegList();
   renderAmendLcList();
   document.getElementById('lcSearch').addEventListener('input',renderLcRegList);
   updateApiDot();
-  // v2.34: COMPASSログインの画面遷移後にOutlookログイン状態を復元（再ログイン不要）
-  if(dvReturned){
-    const rt=sessionStorage.getItem('gr_rt'); sessionStorage.removeItem('gr_rt');
-    let restored=false;
-    if(rt) restored=await loginGraphFromRefresh(rt);
-    if(!restored && dvOk && dvRtOnce) restored=await loginGraphFromRefresh(dvRtOnce);
-    dvRtOnce='';
-    if(dvTokenValid()) scheduleDvRenew();
-    refreshDvBanner();
-  }
-});
+  refreshDvBanner();
+  // Graph 接続時は SP 同期
+  if(LEENAI.auth.status.graph==='ok') syncFromSP(true);
+}
 
-/* ============================================================
-   SECTION: THEME — 듀얼 테마 토글 (§13 표준)
-============================================================ */
-function toggleTheme(){
-  const html=document.documentElement;
-  const current=html.getAttribute('data-theme')||'leenai';
-  const order=['dark','light','leenai','focus'];
-  const next=order[(order.indexOf(current)+1)%order.length];
-  html.setAttribute('data-theme',next);
-  localStorage.setItem('leenai_theme',next);
-  updateThemeBtn(next);
-}
-function updateThemeBtn(theme){
-  const btn=document.getElementById('themeToggleBtn');
-  if(!btn)return;
-  const labels={dark:'🌙 ダーク',light:'☀️ ライト',leenai:'🌿 LEENAI',focus:'🎯 FOCUS'};
-  btn.textContent=labels[theme]||labels.leenai;
-}
-// 이전 테마 자동 복원 (IIFE)
-(function(){
-  const saved=localStorage.getItem('leenai_theme')||'leenai';
-  document.documentElement.setAttribute('data-theme',saved);
-  document.addEventListener('DOMContentLoaded',()=>updateThemeBtn(saved));
-})();
+LEENAI.init({
+  sys: 'D-01',
+  name: 'LC / FD チェッカー',
+  version: '3.0',
+  date: '2026-10-08',
+  desc: 'LC 分析・FD チェック・SI 入力支援',
+  onReady: startTool,
+  redirectUri: 'https://mhlee205.github.io/LC_FD_CHECKER/',
+});
 </script>
-<div class="powered" style="text-align:center;font-size:10px;color:var(--sub2);padding:14px 0;letter-spacing:0.4px;">
-  ✦ Powered by LEENAI Automation System
-</div>
+</div><!-- /inner padding div -->
+<!-- ln-footer は LEENAI が挿入 -->
+</div><!-- /app -->
 </body>
 </html>
