@@ -974,8 +974,8 @@ async function mapLimit(list, limit, fn){
 
 /* v2.25: lastModifiedDateTime による差分同期インデックス
    （本体は lcMap 側に保存済みのため、ここではファイル名→更新時刻・LC idのみ保持） */
-const SPIDX='leenai_sp_idx_v1';
-function loadSpIdx(){ try{ return JSON.parse(localStorage.getItem(SPIDX))||{}; }catch(e){ return {}; } }
+const SPIDX='leenai_sp_idx_v2';   // v3.1: v1 は同一 id の重複を含み得るため、初回は全件再読込
+function loadSpIdx(){ try{ localStorage.removeItem('leenai_sp_idx_v1'); return JSON.parse(localStorage.getItem(SPIDX))||{}; }catch(e){ return {}; } }
 function saveSpIdx(ix){ try{ localStorage.setItem(SPIDX, JSON.stringify(ix)); }catch(e){ console.warn('SPインデックス保存失敗:',e); } }
 
 /* v2.24: ファイル取得の共通化 */
@@ -1129,10 +1129,24 @@ let siRefLoaded=false;    // 로드 완료 여부
 
 /* FILE_SYSTEM_API removed — SP統合 v2.23 */
 /* ローカルフォルダ関連関数 removed — SP統合 v2.23 */
+/* v3.1: 既存のLC JSONを上書き・移動する前に 履歴/LC_JSON へ保管（無ければ何もしない） */
+async function backupLcFileToHist(fname){
+  const prev=await graphGetJson(`${SP_PATH_LC}/${fname}`);
+  if(!prev) return false;
+  const ts=new Date().toISOString().replace(/[-:]/g,'').replace(/\..*$/,'').replace('T','_');
+  await graphPut(`${SP_PATH_LC_BAK}/${fname.replace(/\.json$/,'')}__${ts}.json`, prev);
+  return true;
+}
+async function graphDelete(spPath){
+  const res=await graphFetch(spItemUrl(spPath),{method:'DELETE'});
+  if(!res.ok && res.status!==404) await graphThrow(res,'Graph DELETE');
+  return true;
+}
 async function autoSaveToSP(lc){
   if(LEENAI.auth.status.graph!=='ok') return false;
   try{
     const fname=makeLcFileName(lc);
+    try{ await backupLcFileToHist(fname); }catch(be){ console.warn('LC履歴バックアップ失敗（保存は続行）:',be); }
     await graphPut(`${SP_PATH_LC}/${fname}`,[lc]);
     return fname;
   }catch(e){console.warn('SP保存エラー:',e);return false;}
@@ -1193,21 +1207,36 @@ async function syncFromSP(silent){
       return {name:item.name, mtime:item.lastModifiedDateTime, lcs:arr.filter(x=>x&&x.lcNo), cached:false};
     });
 
-    const nextIdx={};
+    /* v3.1: 旧データは id=契約番号 のため、同一契約の LC が2本あると後の1本で上書きされていた。
+       → 先にキャッシュ分の id を確保し、id が他ファイルと重なる場合はファイル名（契約番号_LC番号）を id にする */
+    const nextIdx={}, claimed=new Set();
     for(const r of results){
-      if(!r) continue;
-      if(r.cached){
-        r.ids.forEach(id=>{ importedLcMap[id]=lcMap[id]; });
-        nextIdx[r.name]={mtime:r.mtime, ids:r.ids};
-        count+=r.ids.length;
-      }else{
-        const ids=[];
-        r.lcs.forEach(lc=>{
-          const id=lc.id||lc.lcNo;
-          lcMap[id]=lc; importedLcMap[id]=lc; ids.push(id); count++;
-        });
-        nextIdx[r.name]={mtime:r.mtime, ids};
-      }
+      if(!r || !r.cached) continue;
+      r.ids.forEach(id=>{ importedLcMap[id]=lcMap[id]; claimed.add(id); });
+      nextIdx[r.name]={mtime:r.mtime, ids:r.ids};
+      count+=r.ids.length;
+    }
+    for(const r of results){
+      if(!r || r.cached) continue;
+      const ids=[];
+      r.lcs.forEach(lc=>{
+        let id=lc.id||lc.lcNo;
+        if(claimed.has(id)){
+          const stem=r.name.replace(/\.json$/i,'');
+          id=claimed.has(stem)?`${stem}#${ids.length+1}`:stem;
+          lc.id=id;
+        }
+        claimed.add(id);
+        lcMap[id]=lc; importedLcMap[id]=lc; ids.push(id); count++;
+      });
+      nextIdx[r.name]={mtime:r.mtime, ids};
+    }
+    // v3.1: SharePoint から消えた・名前が変わった（アメンドでLC番号変更等）ファイルの旧エントリを一覧から外す。
+    //       読込に失敗したファイルが1つでもあれば、誤って外さないよう何もしない
+    if(!results.some(r=>!r)){
+      Object.values(spIdx).forEach(c=>{
+        (c&&Array.isArray(c.ids)?c.ids:[]).forEach(id=>{ if(!claimed.has(id)){ delete lcMap[id]; delete importedLcMap[id]; } });
+      });
     }
     saveSpIdx(nextIdx);
 
@@ -1362,14 +1391,148 @@ function setSt(m,t){const e=document.getElementById('apiSt');e.textContent=m;e.c
 /* ============================================================
    SECTION: LC_STORAGE
 ============================================================ */
+let lcStoreWarned=false;   // v3.1: 容量不足で保存できなかった場合に1回だけ知らせる（従来は無言で失敗）
 function saveLcToStorage(){
-  try{localStorage.setItem(LCSTORE,JSON.stringify(lcMap));}catch(e){}
+  try{localStorage.setItem(LCSTORE,JSON.stringify(lcMap));}
+  catch(e){
+    console.warn('LCローカル保存失敗:',e);
+    if(!lcStoreWarned){
+      lcStoreWarned=true;
+      alert('⚠️ ブラウザの保存容量が不足し、LC一覧をこのPCに保存できませんでした。\nSharePoint接続時は、次回起動時にSharePointから再読込されます。');
+    }
+  }
 }
 function loadLcFromStorage(){
   try{const d=localStorage.getItem(LCSTORE);if(d)lcMap=JSON.parse(d);}catch(e){}
 }
 function getAllLcs(){
   return Object.values(lcMap).sort((a,b)=>(b.analyzedAt||'').localeCompare(a.analyzedAt||''));
+}
+/* ============================================================
+   v3.1 LC JSON 品質改善（要請書 D01 R1・R3・R4・R5・R8）
+   ・rawText は LC 原文のみ（AI応答JSON・要約を入れない）+ rawTextSource で出所を明示
+   ・lcNo / contractNo / 日付 / country をコードで正規化（AIの書き方に依存しない）
+   ・id = ファイル名と同じ「契約番号_LC番号」（同一契約に LC が2本あっても衝突しない）
+   ・保存前の自己検査結果を qa に記録（errors があれば保存しない）
+   ・schemaVersion: 2
+============================================================ */
+const LC_SCHEMA_VERSION = 2;
+const CONTRACT_NO_RE    = /^[A-Z]{2,4}-\d{4}[A-Z0-9]{1,4}$/;   // 例: LRS-26033HK1（形式外は確認のうえ許可）
+const LC_COUNTRY_CODES  = {VIETNAM:'VN',INDONESIA:'ID',THAILAND:'TH',MALAYSIA:'MY',PHILIPPINES:'PH',KOREA:'KR',TAIWAN:'TW',INDIA:'IN',OTHER:''};
+const JP_CHAR_RE        = /[\u3040-\u30FF\u3400-\u9FFF\uFF01-\uFF60]/;
+const SP_PATH_LC_BAK    = SP_PATH_HIST+'/LC_JSON';   // 上書き前のLC JSONの保管先（ACL履歴の一覧には出ない）
+
+// LC 原文の整形: 改ページ表示・ファイル見出し・SWIFT印刷ヘッダ・-CONTINUE-・行頭の記号を除去し、TRAILER 以降を切る（1ファイル単位で呼ぶ）
+function cleanLcRawText(t){
+  if(!t) return '';
+  const out=[];
+  for(const line of String(t).replace(/\r/g,'').split('\n')){
+    if(/^\s*TRAILER\b/i.test(line)) break;
+    if(/^\s*-{2,}\s*Page\s+\d+\s*-{2,}\s*$/i.test(line)) continue;
+    if(/^\s*===\s.*\s===\s*$/.test(line)) continue;
+    if(/^\s*\*\s\*\s\*/.test(line)) continue;
+    if(/^\s*-CONTINUE-\s*$/i.test(line)) continue;
+    out.push(line.replace(/^(\s*)[■●◆◇□▪•◎○]\s*/,'$1'));
+  }
+  return out.join('\n').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+}
+// rawText が AI応答JSON（旧版の 4,000字代替）かどうか
+function isJsonLikeRawText(t){ const s=String(t||'').trim(); return /^[{\[]/.test(s)||/"lcNo"\s*:/.test(s); }
+// 「MI605… DATED ON FEB 18, 2026」「DATED ON SEP 21, 2026 0284IL…」→ 番号と日付に分ける
+function splitLcNoDate(v){
+  let s=String(v||'').replace(/\s+/g,' ').trim(); let date='';
+  const DP='(?:[A-Z]{3,9}\\.?\\s+\\d{1,2}(?:ST|ND|RD|TH)?\\s*,?\\s*\\d{4}|\\d{1,2}(?:ST|ND|RD|TH)?\\s+[A-Z]{3,9}\\.?\\s*,?\\s*\\d{4}|\\d{1,2}\\/\\d{1,2}\\/\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{6})';
+  const m=s.match(new RegExp('\\b(?:DATED|DTD)\\s*(?:ON)?\\s*:?\\s*('+DP+')','i'));
+  if(m){ date=m[1]; s=(s.slice(0,m.index)+' '+s.slice(m.index+m[0].length)).replace(/\s+/g,' '); }
+  s=s.replace(/^(?:L\/?C)\s*(?:NO\.?|NUMBER)\s*[:.]?\s*/i,'').replace(/^[\s,;:]+|[\s,;.]+$/g,'').trim();
+  return {lcNo:s, date};
+}
+// 日付は DD/MM/YYYY のみ。変換できない値（説明文など）は空にして報告
+function normDateStrict(v){
+  if(v===undefined||v===null||String(v).trim()==='') return {v:'',bad:false};
+  let t=String(toDdMmYyyy(String(v).trim()));
+  let m=t.match(/^(\d{2})(\d{2})(\d{2})$/);                // SWIFT の YYMMDD
+  if(m) t=`${m[3]}/${m[2]}/20${m[1]}`;
+  m=t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(m && +m[1]>=1 && +m[1]<=31 && +m[2]>=1 && +m[2]<=12) return {v:t,bad:false};
+  return {v:'',bad:true,orig:String(v)};
+}
+// 国名の判定（文字列中の国名）
+function detectLcCountryText(t){
+  const p=String(t||'').toUpperCase();
+  if(/VIET\s*NAM/.test(p)) return 'VIETNAM';
+  if(p.includes('INDONESIA')) return 'INDONESIA';
+  if(p.includes('THAILAND')) return 'THAILAND';
+  if(p.includes('MALAYSIA')) return 'MALAYSIA';
+  if(p.includes('PHILIPPINES')) return 'PHILIPPINES';
+  if(p.includes('KOREA')) return 'KOREA';
+  if(p.includes('TAIWAN')) return 'TAIWAN';
+  if(/\bINDIA\b/.test(p)) return 'INDIA';
+  return '';
+}
+// LC レコードの正規化（分析直後・アメンド反映時に呼ぶ）。contractNo を渡すとその値で確定。戻り値 = 処理メモ（qa.warnings へ）
+function normalizeLcRecord(lc, contractNo){
+  const notes=[];
+  if(contractNo!==undefined) lc.contractNo=String(contractNo||'').trim().toUpperCase();
+  const before=String(lc.lcNo||'').replace(/\s+/g,' ').trim();
+  const sp=splitLcNoDate(lc.lcNo);
+  if(sp.lcNo!==before) notes.push(`LC番号から番号以外の部分を分離しました（元: ${before}）`);
+  lc.lcNo=sp.lcNo;
+  if(sp.date && !String(lc.lcDate||'').trim()) lc.lcDate=sp.date;
+  ['lcDate','expiryDate','latestShipment'].forEach(k=>{
+    const r=normDateStrict(lc[k]);
+    if(r.bad) notes.push(`${k}: 日付形式でない値を空欄にしました（元: ${r.orig}）`);
+    lc[k]=r.v;
+  });
+  let c=detectLcCountryText(lc.country);
+  if(!c){
+    c=detectLcCountryText(lc.pod)||detectLcCountryText(lc.applicantAddress)||'OTHER';
+    if(c!=='OTHER' && lc.country && String(lc.country).toUpperCase()!==c) notes.push(`仕向国を揚地/住所から判定しました: ${lc.country} → ${c}`);
+  }
+  lc.country=c; lc.countryCode=LC_COUNTRY_CODES[c]||'';
+  // 旧データ: rawText が AI応答JSON → 原文ではないので破棄 / 出所不明 → 復元情報の有無で判定
+  if(isJsonLikeRawText(lc.rawText)){ lc.rawText=''; lc.rawTextSource='NONE'; notes.push('旧データの rawText（AI応答JSON）を破棄しました'); }
+  if(!lc.rawTextSource) lc.rawTextSource=!String(lc.rawText||'').trim()?'NONE':(lc.pdfRestore?'PDF_RESTORED':'AI_TRANSCRIBED');
+  if(lc.rawText) lc.rawText=cleanLcRawText(lc.rawText);
+  lc.schemaVersion=LC_SCHEMA_VERSION;
+  lc.id=makeLcFileName(lc).replace(/\.json$/,'');
+  return notes;
+}
+// 保存前の自己検査（errors があれば保存しない / warnings は表示して保存）
+function runLcQa(lc, extraWarnings){
+  const errors=[], warnings=[...(extraWarnings||[])];
+  if(!lc.contractNo) errors.push('契約番号が空です');
+  else if(!CONTRACT_NO_RE.test(lc.contractNo)) warnings.push(`契約番号の形式が通常と異なります: ${lc.contractNo}`);
+  if(!lc.lcNo) errors.push('LC番号が空です');
+  else if(/\bDATED\b/i.test(lc.lcNo)||JP_CHAR_RE.test(lc.lcNo)) errors.push(`LC番号に番号以外の文字が含まれます: ${lc.lcNo}`);
+  else if(/\s/.test(lc.lcNo)) warnings.push(`LC番号に空白が含まれます: ${lc.lcNo}`);
+  const rt=String(lc.rawText||'').trim();
+  if(isJsonLikeRawText(rt)) errors.push('原文(rawText)がAI応答JSONになっています');
+  if(!rt) warnings.push('LC原文を取得できませんでした（rawText 空）。下流ツールは要約データで処理します');
+  else{
+    if(lc.rawTextSource==='AI_TRANSCRIBED') warnings.push('LC原文はAI転記です。数字・番号は原本と照合してください');
+    const i46=rt.search(/46A/), i47=rt.search(/47A/);
+    const sec=i46>=0?rt.slice(i46, i47>i46?i47+4000:i46+8000):'';
+    if(sec && JP_CHAR_RE.test(sec)) warnings.push('原文の 46A・47A 付近に日本語が含まれます（要約・注釈の混入がないか確認）');
+  }
+  [['lcDate','発行日'],['expiryDate','有効期限'],['latestShipment','最終船積日']].forEach(([k,n])=>{ if(!lc[k]) warnings.push(`${n}が空です`); });
+  if(lc.country==='OTHER') warnings.push('仕向国が OTHER です（国別の処理が働きません）');
+  return {checkedAt:new Date().toISOString(), errors, warnings};
+}
+function renderLcQaBox(qa){
+  if(!qa) return '';
+  const e=qa.errors||[], w=qa.warnings||[];
+  if(!e.length && !w.length) return '✅ 保存前チェック: 問題なし\n\n';
+  let s='';
+  if(e.length) s+=`⛔ 保存前チェック: エラー ${e.length}件（保存していません）\n${e.map(x=>'  ✖ '+x).join('\n')}\n`;
+  if(w.length) s+=`⚠️ 保存前チェック: 確認 ${w.length}件\n${w.map(x=>'  ・'+x).join('\n')}\n`;
+  return s+'\n';
+}
+// 同じファイル名になる別キーの重複を除いて lcMap に登録
+function putLcInMap(lc){
+  const fn=makeLcFileName(lc);
+  Object.keys(lcMap).forEach(k=>{ if(k!==lc.id && lcMap[k] && makeLcFileName(lcMap[k])===fn){ delete lcMap[k]; delete importedLcMap[k]; } });
+  lcMap[lc.id]=lc;
 }
 function makeLcFileName(lc){
   const cn=(lc.contractNo||lc.id||'LC').replace(/[/\\:*?"<>|]/g,'-').trim();
@@ -1640,7 +1803,15 @@ REVISED|CHECK-番号|OK または WARN|修正理由（具体的に）
   }
 }
 
-async function callApi(msgs,max=4000,_retry=0){
+/* v3.1: AI呼び出しの本体は {text, stop} を返す。stop==='max_tokens' は出力上限での途中切れ。
+   callApi() は従来どおりテキストのみ返す（既存の FD/ACL/SI 機能は動作不変）。LC分析・原文転記は callApiEx() で途中切れを検査する */
+async function callApi(msgs,max=4000){
+  const r=await _callApiCore(msgs,max,0);
+  if(r.stop==='max_tokens') console.warn('⚠️ AI応答が出力上限で途中切れしています (max_tokens='+max+')');
+  return r.text;
+}
+async function callApiEx(msgs,max=4000){ return _callApiCore(msgs,max,0); }
+async function _callApiCore(msgs,max,_retry){
   const k=gk();
   if(!k)throw new Error('API Keyが登録されていません');
   const r=await fetch('https://api.anthropic.com/v1/messages',{
@@ -1655,12 +1826,12 @@ async function callApi(msgs,max=4000,_retry=0){
       const msgEl=document.getElementById('fdMsg')||document.getElementById('lcMsg')||document.getElementById('siMsg')||document.getElementById('compAiMsg');
       if(msgEl)msgEl.textContent=`APIが混雑中... ${wait/1000}秒後に自動リトライ (${_retry+1}/3)`;
       await new Promise(res=>setTimeout(res,wait));
-      return callApi(msgs,max,_retry+1);
+      return _callApiCore(msgs,max,_retry+1);
     }
     throw new Error('APIが混雑しています。しばらく待ってから再試行してください。(Overloaded)');
   }
   if(d.error)throw new Error(d.error.message);
-  return d.content.map(b=>b.text||'').join('');
+  return {text:(d.content||[]).map(b=>b.text||'').join(''), stop:d.stop_reason||''};
 }
 function setStep(ids,n){ids.forEach((id,i)=>{const e=document.getElementById(id);if(e)e.className='step'+(i+1<n?' done':i+1===n?' active':'');});}
 
@@ -1812,8 +1983,11 @@ function buildLcVerifyList(lc){
 }
 async function analyzeLc(){
   const k=gk();if(!k){alert('先にAPI Keyを保存してください。');return;}
-  const contractNo=document.getElementById('lcContNo').value.trim();
   if(!lcFiles.length)return;
+  /* v3.1: 契約番号は担当者の入力値のみ使用（AIに推測させない）。空なら分析しない / 通常形式と違えば確認 */
+  const contractNo=document.getElementById('lcContNo').value.trim().toUpperCase();
+  if(!contractNo){alert('契約番号を入力してください。\n（LC JSON のファイル名・各ツールの照合に使うため必須です）');return;}
+  if(!CONTRACT_NO_RE.test(contractNo) && !confirm(`契約番号「${contractNo}」は通常の形式（英字2〜4文字-数字4桁+英数字、例: LRS-26033HK1）と異なります。\nPO番号などを入れていないか確認してください。\n\nこのまま分析しますか？`))return;
   document.getElementById('lcBtn').disabled=true;
   document.getElementById('lcProg').style.display='block';
   document.getElementById('lcResult').style.display='none';
@@ -1829,31 +2003,20 @@ async function analyzeLc(){
     const allPdfRestored=lcPdfInfo.restored.length>0&&lcPdfInfo.partial.length===0&&lcPdfInfo.plain.length===0&&lcPdfInfo.restored.length===lcFiles.length;
     const hasRestored=lcPdfInfo.restored.length>0;
     setStep(['ls1','ls2','ls3'],2);
-    document.getElementById('lcMsg').textContent='AI分析中...（30秒〜1分かかります）';
+    document.getElementById('lcMsg').textContent=allPdfRestored?'AI分析中...（30秒〜1分かかります）':'AI分析中（原文の転記も並行実行）...（1〜2分かかります）';
     const restoreNote=hasRestored?'【PDF原文について】上記のPDFテキストは、PDF内の座標情報から数字「0」を正確に復元した原文です（推測補完なし）。数字・記号・スペースは原文のまま一字一句転記し、スペースの追加・削除・正規化（例:「100PCT」を「100 PCT」にする）や桁数の補正は禁止。JSONの各値も原文の表記を変えずに記載すること（日付項目のみ指定のDD/MM/YYYY形式）。\n\n':'';
-    const rawTextInstr=allPdfRestored?'（LC全文はPDFから復元した原文を使用するため、RAW_TEXTの出力は不要です）':`上記JSONの直後に以下の形式でLC全文を出力（必須）:
-RAW_TEXT_START
-[ここにLC全文テキストを記載 — 以下を漏れなく含めること]
-- LC番号・発行日・有効期限・最終船積日
-- 発行銀行・通知銀行・買主・売主（全住所含む）
-- 金額・TOLERANCE・PARTIAL/TRANSHIP条件
-- 42C全文 / 45A全文（一字一句）/ 46A全書類と枚数 / 47A全条項
-- 44E積地 / 44F揚地 / 43P / 43T
-- CONSIGNEE全文 / NOTIFY PARTY全文（TEL/FAX含む）
-- 保険条件全文 / 提示期間 / Discrepancy Fee
-- その他特記事項
-RAW_TEXT_END`;
-    content.push({type:'text',text:`
+    /* v3.1: 分析(JSON)と原文転記を別々のAI呼び出しに分離。
+       旧版は1回の応答で JSON と全文(RAW_TEXT)を両方出させていたため出力上限で途中切れし、
+       原文の代わりに AI応答の先頭4,000字が rawText に入っていた（要請書 R1）。 */
+    const analyzePrompt={type:'text',text:`
 ${restoreNote}以下のLCを詳細分析し、JSONのみ出力してください（前置き・説明不要）。
 {
-  "id": "${contractNo||Date.now()}",
-  "contractNo": "${contractNo}",
-  "lcNo": "LC番号（完全記載）",
-  "lcDate": "発行日（DD/MM/YYYY形式）",
-  "expiryDate": "有効期限（DD/MM/YYYY形式）",
+  "lcNo": "LC番号のみ（番号部分だけ。DATED ON・発行日・『LC NO.』等の見出しは含めない）",
+  "lcDate": "発行日（DD/MM/YYYY形式。記載がなければ空文字。説明文は入れない）",
+  "expiryDate": "有効期限（DD/MM/YYYY形式。記載がなければ空文字。説明文は入れない）",
   "expiryPlace": "有効期限地",
-  "latestShipment": "最終船積日（DD/MM/YYYY形式）",
-  "country": "仕向国（THAILAND/VIETNAM/INDONESIA/PHILIPPINES/MALAYSIA/OTHERのいずれか）",
+  "latestShipment": "最終船積日（DD/MM/YYYY形式。記載がなければ空文字。説明文は入れない）",
+  "country": "仕向国＝44F揚地の国（VIETNAM/INDONESIA/THAILAND/MALAYSIA/PHILIPPINES/KOREA/TAIWAN/INDIA/OTHERのいずれか）",
   "issuingBank": "発行銀行名",
   "issuingBankCountry": "発行銀行所在国",
   "advisingBank": "通知銀行名",
@@ -1873,7 +2036,7 @@ ${restoreNote}以下のLCを詳細分析し、JSONのみ出力してください
   "commodity45A": "45A商品説明【全文完全記載 — 商品名/数量/単価/単位/規格/等を一切省略せず】",
   "consignee46A": "46A CONSIGNEE指定【全文完全記載 — TO ORDER OF〜等一字一句】",
   "notifyParty46A": "46A NOTIFY PARTY指定【全文完全記載 — TEL/FAX含む全情報】",
-  "docs46A": ["46A要求書類リスト（各書類名と枚数）"],
+  "docs46A": ["46A要求書類リスト（各書類名と枚数。条件の文言は原文の語を言い換えず、意味を変えないこと）"],
   "addCond47A": "47A追加条件【全文完全記載 — 各条項番号・文言を省略せず】",
   "freightCondition": "PREPAID または COLLECT",
   "insuranceCondition": "保険条件（46A指定内容全文）",
@@ -1885,16 +2048,26 @@ ${restoreNote}以下のLCを詳細分析し、JSONのみ出力してください
   "discrepancyFee": "Discrepancy Fee",
   "bankNotes": "この銀行・LCに固有の注意点（過去のDiscrepancy事例等）",
   "checkPoints": ["必須チェックポイント — 見落としやすい点"],
-  "warnings": ["Discrepancyになりやすい条件・注意事項"],
-  "analyzedAt": "${new Date().toISOString()}",
-  "fileNames": ${JSON.stringify(lcFiles.map(f=>f.name))}
-}
-
-${rawTextInstr}`});
-    const raw=await callApi([{role:'user',content}],8000);
+  "warnings": ["Discrepancyになりやすい条件・注意事項"]
+}`};
+    const transcribePrompt={type:'text',text:`上記の書類に含まれる信用状（LC）の本文を、そのまま書き写してください。
+【厳守】
+- 原文を一字一句そのまま転記する（綴りの誤り・略語・記号・数字・番号・改行も原文のまま）
+- 要約・言い換え・翻訳・補足・注釈・見出しの追加は禁止。日本語は一切書かない（原文中の日本語の行は転記しない）
+- 読み取れない文字は「?」とし、推測で補わない
+- SWIFTのフィールド番号（20: 31C: 45A: 46A: 47A: 等）と項目番号は原文どおり含める
+- 銀行の送付状・挨拶文などLC本文以外は不要
+- 出力は LC_TEXT_START と LC_TEXT_END の間に本文のみ。前置き・説明は不要
+LC_TEXT_START
+（ここにLC本文）
+LC_TEXT_END`};
+    const [ana, trans]=await Promise.all([
+      callApiEx([{role:'user',content:[...content, analyzePrompt]}],8000),
+      allPdfRestored?Promise.resolve(null):callApiEx([{role:'user',content:[...content, transcribePrompt]}],16000).catch(e=>({error:e}))
+    ]);
+    if(ana.stop==='max_tokens') throw new Error('AIの分析結果が出力上限で途中切れしました。もう一度実行してください。');
+    const raw=ana.text;
     const cleaned=raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
-    const rawTextMatch=raw.match(/RAW_TEXT_START([\s\S]*?)RAW_TEXT_END/);
-    const rawTextExtracted=rawTextMatch?rawTextMatch[1].trim():'';
     // JSON 추출 — 첫 { 부터 매칭되는 마지막 } 까지
     let jsonStr='';
     const firstBrace=cleaned.indexOf('{');
@@ -1920,26 +2093,49 @@ ${rawTextInstr}`});
         lcData=JSON.parse(fixed);
       }catch(e2){throw new Error('JSONパースエラー: '+pe.message);}
     }
-    normalizeLcDates(lcData);   // v2.36: 日付3項目をDD/MM/YYYYに統一（原文の表記は rawText に保持）
-    if(allPdfRestored){   // v2.35: AIが書き直した全文ではなく、PDFから復元した原文をそのまま保存（以降のACL/FD照合で正確なLC原文を使用）
-      lcData.rawText=lcPdfInfo.restored.map(r=>`=== ${r.name} ===\n${r.text}`).join('\n\n');
+    /* v3.1: rawText = LC原文のみ。取得できなければ空（AI応答で代替しない） */
+    const rawNotes=[];
+    delete lcData.rawText; delete lcData.id;
+    if(allPdfRestored){   // v2.35: PDFから復元した原文をそのまま保存（以降のACL/FD照合で正確なLC原文を使用）
+      lcData.rawText=lcPdfInfo.restored.map(r=>cleanLcRawText(r.text)).filter(Boolean).join('\n\n');
+      lcData.rawTextSource='PDF_RESTORED';
       lcData.pdfRestore={zeros:lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0), files:lcPdfInfo.restored.map(r=>r.name), restoredAt:new Date().toISOString()};
+    }else{
+      let t='';
+      if(trans && trans.error) rawNotes.push('原文の転記に失敗しました: '+(trans.error.message||trans.error));
+      else if(trans && trans.stop==='max_tokens') rawNotes.push('原文の転記が出力上限で途中切れしたため、原文は保存していません');
+      else if(trans){
+        const m=String(trans.text||'').match(/LC_TEXT_START([\s\S]*?)LC_TEXT_END/);
+        if(m) t=cleanLcRawText(m[1]);
+        else rawNotes.push('原文の転記結果を読み取れませんでした');
+      }
+      if(t && isJsonLikeRawText(t)){ t=''; rawNotes.push('原文の転記結果がJSON形式だったため破棄しました'); }
+      lcData.rawText=t;
+      lcData.rawTextSource=t?'AI_TRANSCRIBED':'NONE';
     }
-    if(rawTextExtracted&&!lcData.rawText)lcData.rawText=rawTextExtracted;
-    if(!lcData.rawText)lcData.rawText=cleaned.slice(0,4000);
-    if(!lcData.contractNo&&contractNo)lcData.contractNo=contractNo;
-    if(!lcData.id)lcData.id=contractNo||String(Date.now());
-    lcMap[lcData.id]=lcData;
-    lastAnalyzedId=lcData.id;
-    saveLcToStorage();
+    lcData.analyzedAt=new Date().toISOString();
+    lcData.fileNames=lcFiles.map(f=>f.name);
+    const normNotes=normalizeLcRecord(lcData, contractNo);   // lcNo・日付・国・id の正規化
+    lcData.qa=runLcQa(lcData,[...rawNotes,...normNotes]);
     setStep(['ls1','ls2','ls3'],3);
-    document.getElementById('lcMsg').textContent=allPdfRestored?`保存完了（📄 PDF原文復元: 「0」${lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0)}個を復元）`:'保存完了';
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcResult').style.display='block';
-    document.getElementById('lcResBox').textContent=buildLcPdfNotice(allPdfRestored)+formatLc(lcData)+(allPdfRestored?'':buildLcVerifyList(lcData));
+    if(lcData.qa.errors.length){   // v3.1: 保存前チェックでエラー → 保存しない
+      document.getElementById('lcResBox').textContent=renderLcQaBox(lcData.qa)+formatLc(lcData);
+      document.getElementById('lcSaveNote').innerHTML='⛔ 保存前チェックでエラーがあるため保存していません。契約番号・LCファイルを確認して再実行してください。';
+      document.getElementById('lcSaveNote').style.display='block';
+      document.getElementById('lcBtn').disabled=false;
+      return;
+    }
+    putLcInMap(lcData);
+    lastAnalyzedId=lcData.id;
+    saveLcToStorage();
+    document.getElementById('lcMsg').textContent=allPdfRestored?`保存完了（📄 PDF原文復元: 「0」${lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0)}個を復元）`:'保存完了';
+    document.getElementById('lcResBox').textContent=buildLcPdfNotice(allPdfRestored)+renderLcQaBox(lcData.qa)+formatLc(lcData)+(allPdfRestored?'':buildLcVerifyList(lcData));
+    document.getElementById('lcSaveNote').style.display='none';
     autoSaveToSP(lcData).then(fname=>{
       const note=document.getElementById('lcSaveNote');
-      note.innerHTML=fname?`✅ SharePointに保存しました: <strong>${fname}</strong>`:'✅ ローカルに保存しました（SP未接続のため手動保存推奨）';
+      note.innerHTML=fname?`✅ SharePointに保存しました: <strong>${esc(fname)}</strong>`:'✅ ローカルに保存しました（SP未接続のため手動保存推奨）';
       note.style.display='block';
     });
     document.getElementById('lcBtn').disabled=false;
@@ -1947,7 +2143,8 @@ ${rawTextInstr}`});
   }catch(e){
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcResult').style.display='block';
-    document.getElementById('lcResBox').innerHTML=`<div class="err">⚠️ ${e.message}</div>`;
+    document.getElementById('lcSaveNote').style.display='none';
+    document.getElementById('lcResBox').innerHTML=`<div class="err">⚠️ ${esc(e.message)}</div>`;
     document.getElementById('lcBtn').disabled=false;
   }
 }
@@ -2096,19 +2293,63 @@ ${origSummary}
       return;
     }
 
-    // LC JSON 업데이트
-    normalizeLcDates(result.updatedFields);   // v2.36: 改訂後の日付もDD/MM/YYYYに統一
-    Object.assign(origLc,result.updatedFields);
-    origLc.amendedAt=new Date().toISOString().slice(0,10);
-    lcMap[selAmendLcId]=origLc;
+    /* v3.1: 写しで反映 → 正規化・保存前チェック → 問題なければ確定。
+       アメンド通知の原文は amendments[] に保管し、LC原文(rawText)はそのまま残す。
+       LC番号が変わってファイル名が変わる場合は、旧ファイルを 履歴/LC_JSON へ移す */
+    const AMEND_KEYS=['lcNo','lcDate','expiryDate','expiryPlace','latestShipment','amount','amountNumber','tolerance','partialShipment','transhipment','pol','pod','term42C','commodity45A','consignee46A','notifyParty46A','docs46A','addCond47A','freightCondition','insuranceCondition','insuranceRatio','presentationDays'];
+    const upd={};
+    Object.keys(result.updatedFields).forEach(key=>{ if(AMEND_KEYS.includes(key)) upd[key]=result.updatedFields[key]; });
+    if(!Object.keys(upd).length){
+      document.getElementById('amendResult').innerHTML=`<div class="alert alert-warn">⚠️ 反映できる変更項目が検出されませんでした。アメンド書類を確認してください。</div>`;
+      document.getElementById('amendResult').style.display='block';
+      document.getElementById('amendProg').style.display='none';
+      document.getElementById('amendBtn').disabled=false;
+      return;
+    }
+    normalizeLcDates(upd);   // v2.36: 改訂後の日付もDD/MM/YYYYに統一
+    const oldId=selAmendLcId;
+    const oldFname=makeLcFileName(origLc);
+    const newLc=JSON.parse(JSON.stringify(origLc));
+    Object.assign(newLc,upd);
+    const amendNotes=normalizeLcRecord(newLc, newLc.contractNo);
+    const nowIso=new Date().toISOString();
+    newLc.amendmentNo=(parseInt(newLc.amendmentNo,10)||0)+1;
+    newLc.lastAmendedAt=nowIso;
+    newLc.amendedAt=nowIso.slice(0,10);
+    const amendRaw=lcPdfInfo.restored.map(r=>cleanLcRawText(r.text)).filter(Boolean).join('\n\n');
+    newLc.amendments=(Array.isArray(newLc.amendments)?newLc.amendments:[]).concat([{
+      no:newLc.amendmentNo, at:nowIso, files:amendFiles.map(f=>f.name),
+      rawText:amendRaw, rawTextSource:amendRaw?'PDF_RESTORED':'NONE',
+      changes:result.changes||[], summary:result.summary||''
+    }]);
+    newLc.qa=runLcQa(newLc, amendNotes);
+    if(newLc.qa.errors.length){
+      document.getElementById('amendResult').innerHTML=`<div class="alert alert-ng">⛔ 保存前チェックでエラーがあるため反映していません<br>${newLc.qa.errors.map(x=>'✖ '+esc(x)).join('<br>')}<br>（旧データで契約番号が空の場合は、①LC分析でLCを登録し直してからアメンドを反映してください）</div>`;
+      document.getElementById('amendResult').style.display='block';
+      document.getElementById('amendProg').style.display='none';
+      document.getElementById('amendBtn').disabled=false;
+      return;
+    }
+    // ローカル確定（id が変わる場合は旧キーを外す）
+    if(oldId!==newLc.id){ delete lcMap[oldId]; delete importedLcMap[oldId]; }
+    putLcInMap(newLc);
+    selAmendLcId=newLc.id;
     saveLcToStorage();
-    // SharePointにも自動保存
-    autoSaveToSP(origLc);
-    renderLcRegList();
+    // SharePointにも自動保存（上書き前の版は 履歴/LC_JSON へ）
+    const newFname=makeLcFileName(newLc);
+    autoSaveToSP(newLc).then(async fname=>{
+      if(!fname || newFname===oldFname) return;
+      try{   // LC番号変更でファイル名が変わった → 旧ファイルを履歴へ移す（保管できた場合のみ削除）
+        if(await backupLcFileToHist(oldFname)) await graphDelete(`${SP_PATH_LC}/${oldFname}`);
+      }catch(me){ console.warn('旧LC JSONの移動に失敗:',me); }
+    });
+    renderLcRegList();renderAmendLcList();renderSelList('fdLcList','fd');renderSelList('siLcList','si');renderSelList('compLcList','comp');
 
     // 변경 내역 표시
     const changes=result.changes||[];
-    let html=`<div class="alert alert-ok" style="margin-bottom:8px;">✅ アメンド反映完了 — ${origLc.contractNo} | ${origLc.lcNo}</div>`;
+    let html=`<div class="alert alert-ok" style="margin-bottom:8px;">✅ アメンド反映完了（第${newLc.amendmentNo}回） — ${esc(newLc.contractNo)} | ${esc(newLc.lcNo)}</div>`;
+    const qaW=newLc.qa.warnings||[];
+    if(qaW.length) html+=`<div class="alert alert-warn" style="margin-bottom:8px;">⚠️ 確認 ${qaW.length}件<br>${qaW.map(x=>'・'+esc(x)).join('<br>')}</div>`;
     html+=`<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px 12px;margin-bottom:6px;">
       <div style="font-size:.80rem;font-weight:700;color:#fcd34d;margin-bottom:8px;">📝 変更項目 (${changes.length}件)</div>`;
     changes.forEach(c=>{
@@ -4780,7 +5021,7 @@ function buildInvoiceTextTT(country){if(['KOREA'].includes(country))return`<BANK
 ============================================================ */
 function renderCompSummary(){
   if(!compLcData)return;const lc=compLcData;
-  const flags={'VIETNAM':'🇻🇳','INDONESIA':'🇮🇩','THAILAND':'🇹🇭','KOREA':'🇰🇷','MALAYSIA':'🇲🇾','TAIWAN':'🇹🇼'}[lc.country]||'🌐';
+  const flags={'VIETNAM':'🇻🇳','INDONESIA':'🇮🇩','THAILAND':'🇹🇭','KOREA':'🇰🇷','MALAYSIA':'🇲🇾','TAIWAN':'🇹🇼','PHILIPPINES':'🇵🇭','INDIA':'🇮🇳'}[lc.country]||'🌐';
   document.getElementById('compLcSummary').innerHTML=`
     <div class="lc-summary">
       <div style="font-size:.80rem;font-weight:800;color:var(--teal);margin-bottom:9px;">✅ LC読み込み完了 — <span style="color:var(--ok)">全フィールド自動抽出済み</span></div>
@@ -5137,7 +5378,7 @@ function clearHist(){if(confirm('履歴を削除しますか？')){hist=[];rende
 function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ============================================================
-   SECTION: INIT — LEENAI_COMMON v3.0
+   SECTION: INIT — LEENAI_COMMON（TOOL v3.1）
 ============================================================ */
 function startTool(){
   // ログイン完了後の初期化
@@ -5157,8 +5398,8 @@ function startTool(){
 LEENAI.init({
   sys: 'D-01',
   name: 'LC / FD チェッカー',
-  version: '3.0',
-  date: '2026-10-08',
+  version: '3.1',
+  date: '2026-10-23',
   desc: 'LC 分析・FD チェック・SI 入力支援',
   onReady: startTool,
   redirectUri: 'https://mhlee205.github.io/LC_FD_CHECKER/',
