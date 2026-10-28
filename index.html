@@ -134,6 +134,7 @@ td{padding:4px;border-bottom:1px solid var(--border);}
 .hist-item:hover{border-color:var(--accent);}
 .save-note{font-size:.76rem;margin-top:8px;padding:6px 10px;border-radius:5px;}
 .save-note.ok{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#86efac;}
+.save-note.ng{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
 .export-bar-top{background:rgba(79,124,255,.06);border:1px solid rgba(79,124,255,.2);border-radius:8px;padding:8px 11px;margin-bottom:9px;font-size:.78rem;color:#93c5fd;}
 /* ── SI COMPASS styles ── */
 .si-src-tabs{display:flex;gap:5px;margin-bottom:10px;}
@@ -284,7 +285,8 @@ select.fi{cursor:pointer;height:34px;}
 <div class="panel active" id="tab-lc">
   <div class="card">
     <div class="ct">📋 登録済みLC</div>
-    <div class="export-bar-top">💡 <strong>Outlookログイン</strong>後はLC分析完了時にSharePointへ自動保存。FD・SI・SI入力画面でも同じSharePointから自動読込。</div>
+    <div class="export-bar-top">💡 LC の<strong>原本は SharePoint</strong>。LC分析・アメンドは SharePoint への保存で完了します（Outlookログインが必要）。各タブ・D-03・D-04 は同じ SharePoint から読込みます。</div>
+    <div id="lcPendingPanel" style="display:none"></div>
     <div class="btn-row">
       <button class="btn btn-s" onclick="exportLc()" style="background:rgba(79,124,255,.12);border-color:rgba(79,124,255,.3);color:#93c5fd">📥 JSON書き出し（個別ファイル）</button>
       <button class="btn btn-s" onclick="document.getElementById('importFile').click()" style="background:rgba(124,79,255,.12);border-color:rgba(124,79,255,.3);color:#a78bfa">📂 JSON読み込み</button>
@@ -300,7 +302,8 @@ select.fi{cursor:pointer;height:34px;}
     <div class="ct">📄 新規LC分析</div>
     <div class="crow">
       <label>契約番号:</label>
-      <input type="text" id="lcContNo" placeholder="ファイル名から自動取得" style="width:150px">
+      <input type="text" id="lcContNo" placeholder="ファイル名から自動取得" style="width:170px" list="lcContNoList" onfocus="loadContractCandidates()" autocomplete="off">
+      <datalist id="lcContNoList"></datalist>
       <span id="lcContNoAuto" style="font-size:.80rem;color:var(--accent);margin-left:4px;display:none">📎 自動取得</span>
     </div>
     <div class="ubox" id="lcBox">
@@ -714,6 +717,7 @@ select.fi{cursor:pointer;height:34px;}
 <div class="panel" id="tab-hist">
   <div class="card">
     <div class="ct">📚 チェック履歴（セッション内）</div>
+    <div style="font-size:.78rem;color:var(--sub);margin-bottom:7px;">この画面を開いている間の記録です（再読込で消えます）。ACL確認の記録は SharePoint の 履歴 に保存され、③ タブの「SPから読込」で開けます。</div>
     <div id="histList"><div class="empty">まだ履歴がありません</div></div>
   </div>
   <button class="btn btn-s" onclick="clearHist()">🗑 履歴を削除</button>
@@ -1129,6 +1133,31 @@ let siRefLoaded=false;    // 로드 완료 여부
 
 /* FILE_SYSTEM_API removed — SP統合 v2.23 */
 /* ローカルフォルダ関連関数 removed — SP統合 v2.23 */
+/* ============================================================
+   v3.2 SharePoint 原本管理（要請書 D01 SP自動アップロード U1〜U4 / 形님決定 2026-10-28）
+   ・LC JSON の原本は SharePoint だけ。ローカル（lcMap）は SharePoint の写し（キャッシュ）
+   ・分析・アメンドは「SharePoint への保存」で完了。失敗は ✅ にせず「未保存」として残し、再保存・次回ログイン時に自動再試行
+   ・未保存（lcPending）だけが例外的にこのPCにだけある LC。保存できた時点で通常の写しに戻る
+   ・ローカルにしかない LC（v3.1 以前の取り残し）は、ログイン時の同期で一度 SharePoint へ回収
+============================================================ */
+const LCPEND='leenai_lc_pending_v1';
+let lcPending={};   // id → {reason:'NOSP'|'FAIL'|'QA'|'NEWER', msg, at, renameFrom?}
+function loadLcPending(){ try{ lcPending=JSON.parse(localStorage.getItem(LCPEND))||{}; }catch(e){ lcPending={}; } }
+function saveLcPending(){ try{ localStorage.setItem(LCPEND,JSON.stringify(lcPending)); }catch(e){ console.warn('未保存リスト保存失敗:',e); } }
+function setLcPending(id,reason,msg,extra){ lcPending[id]=Object.assign({reason,msg:msg||'',at:new Date().toISOString()},extra||{}); saveLcPending(); }
+function clearLcPending(id){ if(lcPending[id]){ delete lcPending[id]; saveLcPending(); } }
+function isLcPending(id){ return !!lcPending[id]; }
+const LC_PEND_LABEL={NOSP:'SharePoint未接続',FAIL:'保存失敗',QA:'保存前チェックエラー',NEWER:'SharePoint版より新しい（自動上書きしません）'};
+// 同じ LC かどうかの比較キー（契約番号 + LC番号の先頭部分）。旧ファイル名（…_DATED_ON_…）とも一致させる
+function lcSpKey(contractNo, lcPart){
+  const c=String(contractNo||'').trim().toUpperCase();
+  const l=(String(lcPart||'').toUpperCase().replace(/[\/\\:*?"<>|]/g,'-').trim().split(/[\s_]+/)[0])||'';
+  return c&&l?c+'|'+l:'';
+}
+function lcSpKeyFromName(name){
+  const stem=String(name||'').replace(/\.json$/i,''); const i=stem.indexOf('_');
+  return i>0?lcSpKey(stem.slice(0,i), stem.slice(i+1)):'';
+}
 /* v3.1: 既存のLC JSONを上書き・移動する前に 履歴/LC_JSON へ保管（無ければ何もしない） */
 async function backupLcFileToHist(fname){
   const prev=await graphGetJson(`${SP_PATH_LC}/${fname}`);
@@ -1142,15 +1171,180 @@ async function graphDelete(spPath){
   if(!res.ok && res.status!==404) await graphThrow(res,'Graph DELETE');
   return true;
 }
-async function autoSaveToSP(lc){
-  if(LEENAI.auth.status.graph!=='ok') return false;
+// v3.2: SharePoint へ保存（上書き前は 履歴/LC_JSON へ保管）。結果 {ok, fname} / {ok:false, reason:'NOSP'|'FAIL', msg}
+async function saveLcToSP(lc){
+  if(LEENAI.auth.status.graph!=='ok') return {ok:false, reason:'NOSP', msg:'SharePoint未接続（Outlookログインが必要です）'};
+  const fname=makeLcFileName(lc);
   try{
-    const fname=makeLcFileName(lc);
     try{ await backupLcFileToHist(fname); }catch(be){ console.warn('LC履歴バックアップ失敗（保存は続行）:',be); }
-    await graphPut(`${SP_PATH_LC}/${fname}`,[lc]);
-    return fname;
-  }catch(e){console.warn('SP保存エラー:',e);return false;}
+    const item=await graphPut(`${SP_PATH_LC}/${fname}`,[lc]);
+    const ix=loadSpIdx(); ix[fname]={mtime:(item&&item.lastModifiedDateTime)||'', ids:[lc.id]}; saveSpIdx(ix);
+    importedLcMap[lc.id]=lc;
+    const ren=lcPending[lc.id]&&lcPending[lc.id].renameFrom;
+    clearLcPending(lc.id);
+    if(ren && ren!==fname) await moveOldLcFileToHist(ren);   // アメンドでLC番号が変わり、前回の保存に失敗していた場合
+    return {ok:true, fname};
+  }catch(e){
+    console.warn('SP保存エラー:',e);
+    return {ok:false, reason:'FAIL', msg:e.message||String(e)};
+  }
 }
+// 旧ファイルを 履歴/LC_JSON へ移す（保管できた場合のみ削除）
+async function moveOldLcFileToHist(fname){
+  try{
+    if(await backupLcFileToHist(fname)){
+      await graphDelete(`${SP_PATH_LC}/${fname}`);
+      const ix=loadSpIdx(); delete ix[fname]; saveSpIdx(ix);
+    }
+  }catch(me){ console.warn('旧LC JSONの移動に失敗:',me); }
+}
+// 互換用（旧呼び出し）：成功時はファイル名、失敗時は false
+async function autoSaveToSP(lc){ const r=await saveLcToSP(lc); return r.ok?r.fname:false; }
+// lcMap に入っている LC を SharePoint に保存し、失敗なら未保存として残す
+async function commitLcToSP(lc, extra){
+  const r=await saveLcToSP(lc);
+  if(!r.ok) setLcPending(lc.id, r.reason, r.msg, extra);
+  saveLcToStorage(); renderAllLcLists();
+  return r;
+}
+function renderAllLcLists(){
+  renderLcRegList(); renderAmendLcList(); renderLcPendingPanel();
+  renderSelList('fdLcList','fd'); renderSelList('siLcList','acl'); renderSelList('compLcList','comp');
+}
+// 保存結果の表示（✅ は SharePoint 保存成功のときだけ）
+function renderSaveResult(el, r, lc){
+  if(!el) return;
+  el.style.display='block';
+  if(r.ok){ el.className='save-note ok'; el.innerHTML=`✅ SharePointに保存しました: <strong>${esc(r.fname)}</strong>`; return; }
+  el.className='save-note ng';
+  el.innerHTML=`⚠️ SharePoint への保存に失敗しました（${esc(r.msg)}）— 他のTOOL（D-03・D-04）からは見えません。このPCに「未保存」として残しています。
+    <button class="btn btn-s" style="margin-left:6px;padding:2px 9px;font-size:.78rem" onclick="resaveLc('${esc(lc.id)}')">⬆ 再保存</button>`;
+}
+// 未保存LCの再保存（NEWER は確認のうえ上書き / QA は契約番号の入力から）
+async function resaveLc(id){
+  const lc=lcMap[id]; if(!lc){ alert('LC情報が見つかりません'); return; }
+  const p=lcPending[id]||{};
+  if(p.reason==='QA') return fixQaLc(id);
+  if(LEENAI.auth.status.graph!=='ok'){ alert('SharePoint未接続です。Outlookにログインしてから再保存してください。'); return; }
+  if(p.reason==='NEWER' && !confirm(`SharePoint の「${makeLcFileName(lc)}」を、このPCの内容で上書きします。\n（上書き前の版は 履歴/LC_JSON に保管します）\n\nよろしいですか？`)) return;
+  updateSpStatus('⟳ SharePointへ再保存中...');
+  const stem=makeLcFileName(lc).replace(/\.json$/,'');
+  if(lc.id!==stem){ delete lcMap[id]; clearLcPending(id); lc.id=stem; }   // 回収時の仮 id（…#local 等）を正式な id に戻す
+  putLcInMap(lc);
+  const r=await commitLcToSP(lc, p.renameFrom?{renameFrom:p.renameFrom}:undefined);
+  updateSpStatus(r.ok?`✅ 再保存しました: ${r.fname}`:`⚠️ 再保存に失敗: ${r.msg}`, r.ok);
+  if(lastAnalyzedId===id) renderSaveResult(document.getElementById('lcSaveNote'), r, lc);
+  if(!r.ok) alert('SharePoint への再保存に失敗しました: '+r.msg);
+}
+// QAエラーの未保存LC：契約番号が空なら入力してもらい、正規化・検査をやり直して保存
+async function fixQaLc(id){
+  const lc=lcMap[id]; if(!lc) return;
+  const work=JSON.parse(JSON.stringify(lc));
+  if(!String(work.contractNo||'').trim()){
+    const v=prompt(`LC番号「${work.lcNo||'-'}」の契約番号を入力してください（COMPASS の契約番号）`, '');
+    if(v===null) return;
+    work.contractNo=v;
+  }
+  const notes=normalizeLcRecord(work, work.contractNo);
+  work.qa=runLcQa(work, notes);
+  if(work.qa.errors.length){
+    alert('保存前チェックのエラーが残っています:\n・'+work.qa.errors.join('\n・')+'\n\nLCを ① LC分析 でもう一度分析するか、「破棄」してください。');
+    return;
+  }
+  if(LEENAI.auth.status.graph!=='ok'){ alert('SharePoint未接続です。Outlookにログインしてから保存してください。'); return; }
+  delete lcMap[id]; clearLcPending(id);
+  putLcInMap(work);
+  const r=await commitLcToSP(work);
+  updateSpStatus(r.ok?`✅ 保存しました: ${r.fname}`:`⚠️ 保存に失敗: ${r.msg}`, r.ok);
+  if(!r.ok) alert('SharePoint への保存に失敗しました: '+r.msg);
+}
+// 未保存LCを破棄（このPCから消す。SharePoint 版があれば次の同期で入り直す）
+function discardLocalLc(id){
+  const lc=lcMap[id]; const p=lcPending[id]||{};
+  const msg=p.reason==='NEWER'
+    ? 'このPCの内容を破棄し、SharePoint 版を使います。よろしいですか？'
+    : 'この未保存LCをこのPCから破棄します（SharePoint にはありません）。よろしいですか？';
+  if(!confirm(msg)) return;
+  if(lc){ const fn=makeLcFileName(lc); const ix=loadSpIdx(); if(ix[fn]){ delete ix[fn]; saveSpIdx(ix); } }
+  delete lcMap[id]; delete importedLcMap[id]; clearLcPending(id);
+  saveLcToStorage(); renderAllLcLists();
+  if(p.reason==='NEWER' && LEENAI.auth.status.graph==='ok') syncFromSP(true);
+}
+// 未保存LCの一覧（① LC分析タブ上部）
+function renderLcPendingPanel(){
+  const el=document.getElementById('lcPendingPanel'); if(!el) return;
+  Object.keys(lcPending).forEach(id=>{ if(!lcMap[id]) delete lcPending[id]; });
+  const ids=Object.keys(lcPending);
+  if(!ids.length){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  el.innerHTML=`<div class="alert alert-ng" style="margin-bottom:9px;">
+    <div style="font-weight:700;margin-bottom:5px;">⚠️ SharePoint 未保存のLC ${ids.length}件 — このPCにだけあり、D-03・D-04 や他のPCからは見えません</div>
+    ${ids.map(id=>{
+      const lc=lcMap[id]||{}; const p=lcPending[id];
+      const act=p.reason==='QA'?'✏️ 契約番号を入力して保存':p.reason==='NEWER'?'⬆ SharePointに上書き保存':'⬆ 再保存';
+      return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid rgba(239,68,68,.2);">
+        <div style="flex:1;min-width:200px;font-size:.80rem;"><strong>${esc(lc.contractNo||'(契約番号なし)')}</strong> | ${esc(lc.lcNo||'-')}<br>
+        <span style="color:var(--sub)">${esc(LC_PEND_LABEL[p.reason]||p.reason)}${p.msg?' — '+esc(p.msg):''}</span></div>
+        <button class="btn btn-s" style="padding:3px 9px;font-size:.78rem" onclick="resaveLc('${esc(id)}')">${act}</button>
+        <button class="btn btn-s" style="padding:3px 9px;font-size:.78rem" onclick="discardLocalLc('${esc(id)}')">🗑 破棄</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+// v3.2: 同期の後半 — 未保存の再試行と、ローカルにしかない LC の回収
+//   spFiles: SharePoint の LC JSON 一覧（name, lastModifiedDateTime） / claimed: SharePoint から読んだ id / oldIds: 前回まで SharePoint にあった id
+async function recoverLocalOnlyLcs(spFiles, claimed, oldIds){
+  const byName={}, byKey={};
+  spFiles.forEach(it=>{ byName[it.name]=it; const k=lcSpKeyFromName(it.name); if(k&&!byKey[k]) byKey[k]=it; });
+  const stat={uploaded:0, dropped:0, pending:0, failed:0};
+  const tasks=[];
+  // ① 未保存（保存失敗・未接続）の再試行。保存失敗の後に SharePoint 側が更新されていれば自動では上書きしない
+  Object.keys(lcPending).forEach(id=>{
+    const p=lcPending[id], lc=lcMap[id];
+    if(!lc){ delete lcPending[id]; return; }
+    if(p.reason!=='FAIL' && p.reason!=='NOSP') return;
+    const hit=byName[makeLcFileName(lc)];
+    if(hit && (Date.parse(hit.lastModifiedDateTime)||0)>(Date.parse(p.at)||0)){
+      setLcPending(id,'NEWER',`保存失敗の後に SharePoint の ${hit.name} が更新されています`); return;
+    }
+    tasks.push({id, lc, retry:true});
+  });
+  saveLcPending();
+  // ② ローカルにしかない LC（SharePoint から読んだものではなく、前回まで SharePoint にあったものでもない）
+  Object.keys(lcMap).forEach(id=>{
+    if(claimed.has(id) || oldIds.has(id) || isLcPending(id)) return;
+    const src=lcMap[id];
+    const lc=JSON.parse(JSON.stringify(src));
+    const notes=normalizeLcRecord(lc, lc.contractNo);
+    lc.qa=runLcQa(lc, notes);
+    if(lc.qa.errors.length){ setLcPending(id,'QA',lc.qa.errors.join(' / ')); stat.pending++; return; }
+    const hit=byName[makeLcFileName(lc)]||byKey[lcSpKey(lc.contractNo, lc.lcNo)];
+    if(hit){   // 同じLCが SharePoint にある → 原本優先。ローカルの方が新しい場合だけ保留して職員が判断
+      const localT=Date.parse(lc.lastAmendedAt||lc.analyzedAt||'')||0, spT=Date.parse(hit.lastModifiedDateTime||'')||0;
+      if(localT>spT){
+        if(id!==lc.id) delete lcMap[id];
+        if(!claimed.has(lc.id)) lcMap[lc.id]=lc;
+        else { lc.id=lc.id+'#local'; lcMap[lc.id]=lc; }
+        setLcPending(lc.id,'NEWER',`SharePoint の ${hit.name} より新しい内容です`); stat.pending++;
+      }else{ delete lcMap[id]; stat.dropped++; }
+      return;
+    }
+    if(id!==lc.id) delete lcMap[id];
+    lcMap[lc.id]=lc;
+    tasks.push({id:lc.id, lc, retry:false});
+  });
+  if(tasks.length){
+    updateSpStatus(`⟳ ローカルのみのLCを SharePoint に保存中... (${tasks.length}件)`);
+    const rs=await mapLimit(tasks, SP_WRITE_CONC, t=>saveLcToSP(t.lc));
+    rs.forEach((r,i)=>{
+      const t=tasks[i];
+      if(r&&r.ok){ stat.uploaded++; }
+      else{ setLcPending(t.id,(r&&r.reason)||'FAIL',(r&&r.msg)||'不明なエラー'); stat.failed++; }
+    });
+  }
+  return stat;
+}
+
 async function syncFromSP(silent){
   silent=silent||false;
   var grStatus=LEENAI.auth.status;
@@ -1212,7 +1406,7 @@ async function syncFromSP(silent){
     const nextIdx={}, claimed=new Set();
     for(const r of results){
       if(!r || !r.cached) continue;
-      r.ids.forEach(id=>{ importedLcMap[id]=lcMap[id]; claimed.add(id); });
+      r.ids.forEach(id=>{ if(!isLcPending(id)) importedLcMap[id]=lcMap[id]; claimed.add(id); });
       nextIdx[r.name]={mtime:r.mtime, ids:r.ids};
       count+=r.ids.length;
     }
@@ -1226,26 +1420,30 @@ async function syncFromSP(silent){
           id=claimed.has(stem)?`${stem}#${ids.length+1}`:stem;
           lc.id=id;
         }
-        claimed.add(id);
-        lcMap[id]=lc; importedLcMap[id]=lc; ids.push(id); count++;
+        claimed.add(id); ids.push(id); count++;
+        if(isLcPending(id)) return;   // v3.2: 未保存（このPCの方が新しい）LC は SharePoint 版で上書きしない
+        lcMap[id]=lc; importedLcMap[id]=lc;
       });
       nextIdx[r.name]={mtime:r.mtime, ids};
     }
     // v3.1: SharePoint から消えた・名前が変わった（アメンドでLC番号変更等）ファイルの旧エントリを一覧から外す。
-    //       読込に失敗したファイルが1つでもあれば、誤って外さないよう何もしない
+    //       読込に失敗したファイルが1つでもあれば、誤って外さないよう何もしない（未保存LCは残す）
+    const oldIds=new Set();
+    Object.values(spIdx).forEach(c=>{ (c&&Array.isArray(c.ids)?c.ids:[]).forEach(id=>oldIds.add(id)); });
     if(!results.some(r=>!r)){
-      Object.values(spIdx).forEach(c=>{
-        (c&&Array.isArray(c.ids)?c.ids:[]).forEach(id=>{ if(!claimed.has(id)){ delete lcMap[id]; delete importedLcMap[id]; } });
-      });
+      oldIds.forEach(id=>{ if(!claimed.has(id) && !isLcPending(id)){ delete lcMap[id]; delete importedLcMap[id]; } });
     }
     saveSpIdx(nextIdx);
 
+    // v3.2: 未保存LCの再試行 + ローカルにしかない LC を SharePoint へ回収（原本は SharePoint）
+    const rec=await recoverLocalOnlyLcs(targets, claimed, oldIds);
     saveLcToStorage();
-    renderLcRegList();
-    renderSelList('fdLcList','fd');
-    renderSelList('siLcList','acl');
-    renderSelList('compLcList','comp');
-    updateSpStatus(`☁️ SharePoint 接続済 — ${count}件 のLCを読込${cacheHit?`（うちキャッシュ ${cacheHit}件）`:''}`);
+    renderAllLcLists();
+    const pendN=Object.keys(lcPending).length;
+    let st=`☁️ SharePoint 接続済 — ${count}件 のLCを読込${cacheHit?`（うちキャッシュ ${cacheHit}件）`:''}`;
+    if(rec.uploaded) st+=` / ⬆ ローカルのみのLC ${rec.uploaded}件を SharePoint に保存`;
+    if(pendN) st+=` / ⚠️ 未保存 ${pendN}件（① LC分析タブで確認）`;
+    updateSpStatus(st, !pendN);
     return count;
   }catch(e){
     updateSpStatus('❌ SP同期エラー: '+e.message,false);
@@ -1404,6 +1602,7 @@ function saveLcToStorage(){
 }
 function loadLcFromStorage(){
   try{const d=localStorage.getItem(LCSTORE);if(d)lcMap=JSON.parse(d);}catch(e){}
+  loadLcPending();   // v3.2
 }
 function getAllLcs(){
   return Object.values(lcMap).sort((a,b)=>(b.analyzedAt||'').localeCompare(a.analyzedAt||''));
@@ -1539,12 +1738,23 @@ function makeLcFileName(lc){
   const ln=(lc.lcNo||'').replace(/[/\\:*?"<>|]/g,'-').replace(/\s+/g,'_').trim();
   return ln?`${cn}_${ln}.json`:`${cn}.json`;
 }
-function deleteLc(id,e){
+/* v3.2: 原本は SharePoint。削除 = SharePoint のファイルを 履歴/LC_JSON へ移す（D-03・D-04 からも見えなくなる）。
+   未保存LCはこのPCから破棄するだけ */
+async function deleteLc(id,e){
   if(e)e.stopPropagation();
-  if(!confirm('このLCを削除しますか？'))return;
+  if(isLcPending(id)){ discardLocalLc(id); return; }
+  const lc=lcMap[id]; if(!lc) return;
+  const fname=makeLcFileName(lc);
+  if(LEENAI.auth.status.graph!=='ok'){alert('SharePoint に接続されていません。Outlook にログインしてから削除してください。');return;}
+  if(!confirm(`このLCを削除しますか？\n\nSharePoint の「${fname}」を 履歴/LC_JSON に移します。\nD-03・D-04 や他のPCからも見えなくなります。`))return;
+  try{
+    const moved=await backupLcFileToHist(fname);
+    if(moved) await graphDelete(`${SP_PATH_LC}/${fname}`);
+    const ix=loadSpIdx(); delete ix[fname]; saveSpIdx(ix);
+  }catch(err){ alert('SharePoint からの削除に失敗しました: '+err.message); return; }
   delete lcMap[id];delete importedLcMap[id];
   saveLcToStorage();
-  renderLcRegList();renderSelList('fdLcList','fd');renderSelList('siLcList','si');renderSelList('compLcList','comp');
+  renderAllLcLists();
 }
 
 /* ============================================================
@@ -1846,9 +2056,9 @@ function renderLcRegList(){
   document.getElementById('lcCount').textContent=`${all.length}件登録済み`;
   if(!items.length){el.innerHTML='<div class="empty">'+(!all.length?'まだLCが登録されていません':'検索結果がありません')+'</div>';return;}
   el.innerHTML=items.map(i=>{
-    const isImp=!!importedLcMap[i.id];
-    const badge=isImp?`<span class="badge b-sp">📂読込</span>`:`<span class="badge b-local">💻ローカル</span>`;
-    return`<div class="lc-item${isImp?' imported':''}">
+    const isPend=isLcPending(i.id);   // v3.2: SharePoint が原本。未保存だけを目立たせる
+    const badge=isPend?`<span class="badge b-warn">⚠️ 未保存</span>`:`<span class="badge b-sp">☁️ SP</span>`;
+    return`<div class="lc-item${isPend?'':' imported'}">
       <div class="lc-head">
         <div style="flex:1;min-width:0">
           <div class="lc-title">📄 ${i.contractNo||'-'} ${badge} <span class="badge b-ok">${(i.issuingBank||'-').split(' ')[0]}</span></div>
@@ -1865,7 +2075,7 @@ function renderLcRegList(){
 }
 function renderSelList(elId,mode){
   const el=document.getElementById(elId);if(!el)return;
-  const all=getAllLcs();
+  const all=getAllLcs().filter(i=>!isLcPending(i.id));   // v3.2: SharePoint 未保存のLCは選べない（① で再保存）
   const selId=mode==='fd'?selLcFd:mode==='acl'?selLcAcl:mode==='comp'?selLcComp:selLcComp;
   // 탭별 검색창 참조
   const searchId=mode==='fd'?'fdLcSearch':mode==='acl'?'siLcSearch':'compLcSearch';
@@ -1874,9 +2084,8 @@ function renderSelList(elId,mode){
   if(!all.length){el.innerHTML='<div class="empty">① LC分析タブでLCを登録するかJSONを読み込んでください</div>';return;}
   if(!items.length){el.innerHTML='<div class="empty">検索結果がありません</div>';return;}
   el.innerHTML=items.map(i=>{
-    const isImp=!!importedLcMap[i.id];
-    const badge=isImp?`<span class="badge b-sp">📂</span>`:`<span class="badge b-local">💻</span>`;
-    return`<div class="lc-item${selId===i.id?' selected':''}${isImp?' imported':''}" onclick="pickLc('${i.id}','${mode}')">
+    const badge=`<span class="badge b-sp">☁️</span>`;
+    return`<div class="lc-item${selId===i.id?' selected':''} imported" onclick="pickLc('${i.id}','${mode}')">
       <div class="lc-head">
         <div>
           <div class="lc-title">📄 ${i.contractNo||'-'} ${badge} <span class="badge b-ok">${(i.issuingBank||'-').split(' ')[0]}</span></div>
@@ -1929,17 +2138,38 @@ function exportLcById(id,e){
   const blob=new Blob([JSON.stringify([lc],null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=makeLcFileName(lc);a.click();
 }
+/* v3.2: JSON読込も SharePoint 原本主義。SharePoint に無いLCだけを正規化・検査して SharePoint に保存する
+   （同じLCが SharePoint にあれば読込まない＝原本優先） */
 function importLc(inp){
   const f=inp.files[0];if(!f)return;
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     try{
+      if(LEENAI.auth.status.graph!=='ok'){alert('SharePoint に接続されていません。\nOutlook にログインしてから JSON を読み込んでください。');return;}
       const data=JSON.parse(e.target.result);
-      const arr=Array.isArray(data)?data:[data];
-      let count=0;
-      arr.forEach(lc=>{if(lc&&lc.id){importedLcMap[lc.id]=lc;lcMap[lc.id]=lc;count++;}});
-      saveLcToStorage();renderLcRegList();renderSelList('fdLcList','fd');renderSelList('siLcList','si');renderSelList('compLcList','comp');
-      alert(`✅ ${count}件のLCを読み込みました`);
+      const arr=(Array.isArray(data)?data:[data]).filter(x=>x&&typeof x==='object'&&x.lcNo);
+      if(!arr.length){alert('LC JSON が含まれていません');return;}
+      const items=await graphList(SP_PATH_LC);
+      const byName={}, byKey={};
+      items.forEach(it=>{ if(!it.name.endsWith('.json'))return; byName[it.name]=it; const k=lcSpKeyFromName(it.name); if(k) byKey[k]=it; });
+      const res={saved:[],skipped:[],qa:[],failed:[]};
+      for(const src of arr){
+        const lc=JSON.parse(JSON.stringify(src));
+        const notes=normalizeLcRecord(lc, lc.contractNo);
+        lc.qa=runLcQa(lc, notes);
+        if(lc.qa.errors.length){ res.qa.push(`${lc.lcNo||'-'}: ${lc.qa.errors.join(' / ')}`); continue; }
+        const hit=byName[makeLcFileName(lc)]||byKey[lcSpKey(lc.contractNo, lc.lcNo)];
+        if(hit){ res.skipped.push(hit.name); continue; }
+        putLcInMap(lc);
+        const r=await commitLcToSP(lc);
+        (r.ok?res.saved:res.failed).push(r.ok?r.fname:`${makeLcFileName(lc)}（${r.msg}）`);
+      }
+      saveLcToStorage(); renderAllLcLists();
+      let m=`JSON読込の結果\n\n⬆ SharePoint に保存: ${res.saved.length}件`;
+      if(res.skipped.length) m+=`\n⏭ SharePoint に既にあるため読込まず（原本優先）: ${res.skipped.length}件\n  ${res.skipped.join('\n  ')}`;
+      if(res.qa.length) m+=`\n⛔ 保存前チェックエラーのため読込まず: ${res.qa.length}件\n  ${res.qa.join('\n  ')}`;
+      if(res.failed.length) m+=`\n⚠️ 保存失敗（未保存として残しています）: ${res.failed.length}件\n  ${res.failed.join('\n  ')}`;
+      alert(m);
     }catch(err){alert('JSON読み込みエラー: '+err.message);}
   };
   reader.readAsText(f);inp.value='';
@@ -1957,6 +2187,17 @@ function onLcFile(inp){
     const auto=extractContractNo(lcFiles[0].name);
     if(auto&&!document.getElementById('lcContNo').value){document.getElementById('lcContNo').value=auto;document.getElementById('lcContNoAuto').style.display='inline';}
   }
+}
+/* v3.2: 契約番号の候補（COMPASS の販売契約・新しい順 300件）。入力欄に初めてフォーカスしたとき1回だけ取得 */
+let contractCandLoaded=false;
+async function loadContractCandidates(){
+  if(contractCandLoaded||!dvTokenValid()) return;
+  contractCandLoaded=true;
+  try{
+    const d=await dvGet('cr49f_sale_contracts?$select=cr49f_sale_contract_no&$orderby=cr49f_sale_contract_date desc&$top=300');
+    const dl=document.getElementById('lcContNoList'); if(!dl) return;
+    dl.innerHTML=(d.value||[]).map(x=>x.cr49f_sale_contract_no).filter(Boolean).map(v=>`<option value="${esc(v)}"></option>`).join('');
+  }catch(e){ contractCandLoaded=false; console.warn('契約番号候補の取得失敗:',e); }
 }
 function extractContractNo(filename){
   const m=filename.match(/([A-Z]{2,4}-\d{4}[A-Z0-9]{1,4})/);return m?m[1].toUpperCase():'';
@@ -1985,9 +2226,24 @@ async function analyzeLc(){
   const k=gk();if(!k){alert('先にAPI Keyを保存してください。');return;}
   if(!lcFiles.length)return;
   /* v3.1: 契約番号は担当者の入力値のみ使用（AIに推測させない）。空なら分析しない / 通常形式と違えば確認 */
-  const contractNo=document.getElementById('lcContNo').value.trim().toUpperCase();
+  let contractNo=document.getElementById('lcContNo').value.trim().toUpperCase();
   if(!contractNo){alert('契約番号を入力してください。\n（LC JSON のファイル名・各ツールの照合に使うため必須です）');return;}
+  /* v3.2: LC の原本は SharePoint。保存できない状態では分析しない（AI費用・作業の無駄を防ぐ） */
+  if(LEENAI.auth.status.graph!=='ok'){alert('SharePoint に接続されていません。\nOutlook にログインしてから LC 分析を行ってください。\n（LC は SharePoint に保存して完了です）');return;}
   if(!CONTRACT_NO_RE.test(contractNo) && !confirm(`契約番号「${contractNo}」は通常の形式（英字2〜4文字-数字4桁+英数字、例: LRS-26033HK1）と異なります。\nPO番号などを入れていないか確認してください。\n\nこのまま分析しますか？`))return;
+  /* v3.2: 契約番号を COMPASS の販売契約と照合（D-03・D-04 は COMPASS の契約番号でファイルを探すため） */
+  const compassNotes=[];
+  if(dvTokenValid()){
+    try{
+      const d=await dvGet(`cr49f_sale_contracts?$filter=${encodeURIComponent(`cr49f_sale_contract_no eq '${contractNo.replace(/'/g,"''")}'`)}&$select=cr49f_sale_contract_no&$top=1`);
+      const hit=(d.value||[])[0];
+      if(hit && hit.cr49f_sale_contract_no) contractNo=String(hit.cr49f_sale_contract_no).trim();
+      else{
+        if(!confirm(`契約番号「${contractNo}」が COMPASS の販売契約に見つかりません。\nこの番号で保存すると、D-03・D-04 が LC JSON を自動取得できません。\n\n入力ミスがないか確認してください。このまま分析しますか？`))return;
+        compassNotes.push('契約番号が COMPASS の販売契約に見つかりません（D-03・D-04 の自動取得ができない可能性）');
+      }
+    }catch(ce){ compassNotes.push('COMPASS 照合エラーのため契約番号を照合していません: '+ce.message); }
+  }else compassNotes.push('COMPASS 未接続のため契約番号を照合していません');
   document.getElementById('lcBtn').disabled=true;
   document.getElementById('lcProg').style.display='block';
   document.getElementById('lcResult').style.display='none';
@@ -2116,30 +2372,31 @@ LC_TEXT_END`};
     lcData.analyzedAt=new Date().toISOString();
     lcData.fileNames=lcFiles.map(f=>f.name);
     const normNotes=normalizeLcRecord(lcData, contractNo);   // lcNo・日付・国・id の正規化
-    lcData.qa=runLcQa(lcData,[...rawNotes,...normNotes]);
+    lcData.qa=runLcQa(lcData,[...compassNotes,...rawNotes,...normNotes]);
     setStep(['ls1','ls2','ls3'],3);
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcResult').style.display='block';
     if(lcData.qa.errors.length){   // v3.1: 保存前チェックでエラー → 保存しない
       document.getElementById('lcResBox').textContent=renderLcQaBox(lcData.qa)+formatLc(lcData);
+      document.getElementById('lcSaveNote').className='save-note ng';
       document.getElementById('lcSaveNote').innerHTML='⛔ 保存前チェックでエラーがあるため保存していません。契約番号・LCファイルを確認して再実行してください。';
       document.getElementById('lcSaveNote').style.display='block';
       document.getElementById('lcBtn').disabled=false;
       return;
     }
+    if(lcPending[lcData.id]) clearLcPending(lcData.id);   // 同じLCの再分析 → 新しい内容で保存し直す
     putLcInMap(lcData);
     lastAnalyzedId=lcData.id;
     saveLcToStorage();
     document.getElementById('lcMsg').textContent=allPdfRestored?`保存完了（📄 PDF原文復元: 「0」${lcPdfInfo.restored.reduce((n,r)=>n+r.zeros,0)}個を復元）`:'保存完了';
     document.getElementById('lcResBox').textContent=buildLcPdfNotice(allPdfRestored)+renderLcQaBox(lcData.qa)+formatLc(lcData)+(allPdfRestored?'':buildLcVerifyList(lcData));
-    document.getElementById('lcSaveNote').style.display='none';
-    autoSaveToSP(lcData).then(fname=>{
-      const note=document.getElementById('lcSaveNote');
-      note.innerHTML=fname?`✅ SharePointに保存しました: <strong>${esc(fname)}</strong>`:'✅ ローカルに保存しました（SP未接続のため手動保存推奨）';
-      note.style.display='block';
-    });
+    /* v3.2: SharePoint への保存で完了。失敗は ✅ にせず「未保存」+ 再保存ボタン */
+    const note=document.getElementById('lcSaveNote');
+    note.className='save-note'; note.textContent='⟳ SharePoint に保存中...'; note.style.display='block';
+    const saveRes=await commitLcToSP(lcData);
+    renderSaveResult(note, saveRes, lcData);
+    if(!saveRes.ok) document.getElementById('lcMsg').textContent='⚠️ 分析完了 — SharePoint 未保存';
     document.getElementById('lcBtn').disabled=false;
-    renderLcRegList();renderSelList('fdLcList','fd');renderSelList('siLcList','si');renderSelList('compLcList','comp');
   }catch(e){
     document.getElementById('lcProg').style.display='none';
     document.getElementById('lcResult').style.display='block';
@@ -2187,7 +2444,7 @@ let selAmendLcId=null;
 function renderAmendLcList(){
   const el=document.getElementById('amendLcList');
   if(!el)return;
-  const all=getAllLcs();
+  const all=getAllLcs().filter(i=>!isLcPending(i.id));   // v3.2: 未保存LCは先に再保存
   const q=(document.getElementById('amendLcSearch')?.value||'').toLowerCase();
   const items=q?all.filter(i=>(i.contractNo||'').toLowerCase().includes(q)||(i.lcNo||'').toLowerCase().includes(q)):all;
   if(!items.length){el.innerHTML='<div class="empty">LCが見つかりません</div>';return;}
@@ -2222,6 +2479,7 @@ async function runAmend(){
   if(!selAmendLcId||!amendFiles.length)return;
   const origLc=lcMap[selAmendLcId];
   if(!origLc){alert('LC情報が見つかりません');return;}
+  if(LEENAI.auth.status.graph!=='ok'){alert('SharePoint に接続されていません。\nOutlook にログインしてからアメンドを反映してください。');return;}   // v3.2
   document.getElementById('amendBtn').disabled=true;
   document.getElementById('amendProg').style.display='block';
   document.getElementById('amendResult').style.display='none';
@@ -2335,19 +2593,20 @@ ${origSummary}
     putLcInMap(newLc);
     selAmendLcId=newLc.id;
     saveLcToStorage();
-    // SharePointにも自動保存（上書き前の版は 履歴/LC_JSON へ）
+    /* v3.2: SharePoint への保存で完了（上書き前の版は 履歴/LC_JSON へ）。
+       LC番号変更でファイル名が変わる場合、保存成功後に旧ファイルを履歴へ移す（失敗時は再保存のときに移す） */
     const newFname=makeLcFileName(newLc);
-    autoSaveToSP(newLc).then(async fname=>{
-      if(!fname || newFname===oldFname) return;
-      try{   // LC番号変更でファイル名が変わった → 旧ファイルを履歴へ移す（保管できた場合のみ削除）
-        if(await backupLcFileToHist(oldFname)) await graphDelete(`${SP_PATH_LC}/${oldFname}`);
-      }catch(me){ console.warn('旧LC JSONの移動に失敗:',me); }
-    });
-    renderLcRegList();renderAmendLcList();renderSelList('fdLcList','fd');renderSelList('siLcList','si');renderSelList('compLcList','comp');
+    const renameFrom=newFname!==oldFname?oldFname:'';
+    if(lcPending[newLc.id]) clearLcPending(newLc.id);
+    const saveRes=await commitLcToSP(newLc, renameFrom?{renameFrom}:undefined);
+    if(saveRes.ok && renameFrom) await moveOldLcFileToHist(renameFrom);
 
     // 변경 내역 표시
     const changes=result.changes||[];
-    let html=`<div class="alert alert-ok" style="margin-bottom:8px;">✅ アメンド反映完了（第${newLc.amendmentNo}回） — ${esc(newLc.contractNo)} | ${esc(newLc.lcNo)}</div>`;
+    let html=saveRes.ok
+      ? `<div class="alert alert-ok" style="margin-bottom:8px;">✅ アメンド反映完了（第${newLc.amendmentNo}回） — ${esc(newLc.contractNo)} | ${esc(newLc.lcNo)}<br><span style="font-size:.78rem">SharePointに保存しました: ${esc(saveRes.fname)}</span></div>`
+      : `<div class="alert alert-ng" style="margin-bottom:8px;">⚠️ アメンドは反映しましたが、SharePoint への保存に失敗しました（${esc(saveRes.msg)}）— 他のTOOL（D-03・D-04）からは見えません。
+          <button class="btn btn-s" style="margin-left:6px;padding:2px 9px;font-size:.78rem" onclick="resaveLc('${esc(newLc.id)}')">⬆ 再保存</button></div>`;
     const qaW=newLc.qa.warnings||[];
     if(qaW.length) html+=`<div class="alert alert-warn" style="margin-bottom:8px;">⚠️ 確認 ${qaW.length}件<br>${qaW.map(x=>'・'+esc(x)).join('<br>')}</div>`;
     html+=`<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px 12px;margin-bottom:6px;">
@@ -3850,8 +4109,9 @@ OVERALL: OK または NG または WARN
     document.getElementById('blProg').style.display='none';
     document.getElementById('blResult').style.display='block';
     document.getElementById('blBtn').disabled=false;
+    const blOvM=[...String(reviewedBl||'').matchAll(/OVERALL:\s*(OK|NG|WARN)/gi)].pop();   // v3.2: 実際の判定（従来は常に OK）
     hist.unshift({type:'BL',contractNo:loadedAclHistory.contractNo,invNo:loadedAclHistory.invoiceNo,
-      country:loadedAclHistory.country,overall:'OK',
+      country:loadedAclHistory.country,overall:(blOvM?blOvM[1]:'WARN').toUpperCase(),
       checkedAt:new Date().toLocaleString('ja-JP'),html:document.getElementById('blRc').innerHTML});
   }catch(e){
     document.getElementById('blProg').style.display='none';
@@ -5354,7 +5614,7 @@ function renderHist(){
   el.innerHTML=hist.map((h,i)=>{
     const vc=h.overall==='OK'?'var(--ok)':h.overall==='NG'?'var(--ng)':'var(--warn)';
     const ve=h.overall==='OK'?'✅':h.overall==='NG'?'❌':'⚠️';
-    const tb=h.type==='SI'?`<span class="badge b-sp">SI確認</span>`:`<span class="badge b-ok">FD照合</span>`;
+    const tb=h.type==='FD'?`<span class="badge b-ok">FD照合</span>`:h.type==='BL'?`<span class="badge b-sp">BL Draft確認</span>`:`<span class="badge b-sp">ACL確認</span>`;   // v3.2: 種類どおりに表示
     return`<div class="hist-item" onclick="showHist(${i})">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>${tb} <span style="font-size:.76rem;font-weight:700">${h.contractNo} — ${h.invNo}</span>
@@ -5364,11 +5624,13 @@ function renderHist(){
   }).join('');
 }
 function showHist(i){
-  const h=hist[i];const tab=h.type==='SI'?'si':'fd';
-  document.getElementById(tab==='si'?'siRc':'fdRc').innerHTML=h.html;
-  document.getElementById(tab==='si'?'siResult':'fdResult').style.display='block';
-  goTab(tab);
-  setTimeout(()=>document.getElementById(tab==='si'?'siResult':'fdResult').scrollIntoView({behavior:'smooth'}),100);
+  // v3.2: ACL・BL の履歴は ③ タブの各結果欄に表示（従来は FD 欄に表示されていた）
+  const h=hist[i];
+  const dst=h.type==='FD'?{tab:'fd',rc:'fdRc',box:'fdResult'}:h.type==='BL'?{tab:'si',rc:'blRc',box:'blResult'}:{tab:'si',rc:'aclRc',box:'aclResult'};
+  document.getElementById(dst.rc).innerHTML=h.html;
+  document.getElementById(dst.box).style.display='block';
+  goTab(dst.tab);
+  setTimeout(()=>document.getElementById(dst.box).scrollIntoView({behavior:'smooth'}),100);
 }
 function clearHist(){if(confirm('履歴を削除しますか？')){hist=[];renderHist();}}
 
@@ -5378,7 +5640,7 @@ function clearHist(){if(confirm('履歴を削除しますか？')){hist=[];rende
 function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ============================================================
-   SECTION: INIT — LEENAI_COMMON（TOOL v3.1）
+   SECTION: INIT — LEENAI_COMMON（TOOL v3.2）
 ============================================================ */
 function startTool(){
   // ログイン完了後の初期化
@@ -5386,8 +5648,7 @@ function startTool(){
   if(k)setSt('✅ API Key登録済み ('+k.slice(0,16)+'...)','ok');
   else setSt('⚠️ API Key未登録 — 入力して保存してください','ng');
   loadLcFromStorage();
-  renderLcRegList();
-  renderAmendLcList();
+  renderAllLcLists();   // v3.2: 未保存パネル含む
   document.getElementById('lcSearch').addEventListener('input',renderLcRegList);
   updateApiDot();
   refreshDvBanner();
@@ -5398,8 +5659,8 @@ function startTool(){
 LEENAI.init({
   sys: 'D-01',
   name: 'LC / FD チェッカー',
-  version: '3.1',
-  date: '2026-10-23',
+  version: '3.2',
+  date: '2026-10-28',
   desc: 'LC 分析・FD チェック・SI 入力支援',
   onReady: startTool,
   redirectUri: 'https://mhlee205.github.io/LC_FD_CHECKER/',
